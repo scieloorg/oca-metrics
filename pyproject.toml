@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oca-metrics"
+version = "0.1.0"
+description = "Library for extraction and computation of bibliometric metrics."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    { name = "Rafael J. P. Damaceno", email = "rafael@pitangainnovare.com.br" }
+]
+dependencies = [
+    "pandas",
+    "duckdb",
+    "openpyxl",
+    "orjson",
+    "xylose",
+    "pymongo",
+    "pyarrow",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+elasticsearch = [
+    "elasticsearch",
+]
+opensearch = [
+    "opensearch-py",
+]
+
+[project.scripts]
+oca-metrics = "oca_metrics.cli.compute:main"
+oca-prep = "oca_metrics.cli.prepare:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["oca_metrics*"]
