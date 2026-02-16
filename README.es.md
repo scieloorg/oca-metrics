@@ -32,6 +32,29 @@ pytest
 pip install .
 ```
 
+### Fuentes de Datos
+
+- **OpenAlex**: Los datos se obtienen del snapshot de OpenAlex, específicamente del subconjunto SciELO. Ver: https://docs.openalex.org/download-all-data/openalex-snapshot
+- **SciELO**: Los datos se obtienen de un volcado MongoDB de la base ArticleMeta (infraestructura interna de SciELO).
+
+### Pipeline de extremo a extremo (4 etapas)
+
+El flujo general está organizado en cuatro etapas:
+
+1. Extraer trabajos de OpenAlex a Parquet (`oca-prep extract-oa`).
+2. Preparar y deduplicar registros SciELO (`oca-prep prepare-scielo`).
+3. Integrar SciELO y OpenAlex en un dataset fusionado (`oca-prep integrate`).
+4. Calcular indicadores por categoría y revista a partir del Parquet fusionado (`oca-metrics`).
+
+```mermaid
+flowchart LR
+    A["1. Extracción OpenAlex<br/>oca-prep extract-oa"]
+    B["2. Preparación SciELO<br/>oca-prep prepare-scielo"]
+    C["3. Integración de datasets<br/>oca-prep integrate"]
+    D["4. Cálculo de indicadores<br/>oca-metrics"]
+    A --> B --> C --> D
+```
+
 ### Preparación de Datos (CLI)
 
 La biblioteca proporciona la herramienta `oca-prep` para preparar los datos antes de la computación de las métricas.
@@ -205,11 +228,35 @@ Un solo artículo publicado en varios idiomas (por ejemplo, tres versiones) est�
 
 Para evitar esto, el proceso de fusión consolida todas las versiones y sus citas en un solo artículo. Así, la contribución total del artículo se calcula correctamente, reflejando todas las versiones y citas sin duplicidad.
 
+### Ejemplo de registro fusionado
+
+Ejemplo ilustrativo (`is_merged = true`):
+
+| work_id | all_work_ids | scielo_pid_v2 | publication_year | citations_total | citations_window_2y | citations_window_3y | citations_window_5y |
+|:--|:--|:--|--:|--:|--:|--:|--:|
+| https://openalex.org/W1 | [https://openalex.org/W1, https://openalex.org/W2] | [S0001] | 2021 | 15 | 3 | 5 | 8 |
+
+En este ejemplo, el registro final consolida dos trabajos de OpenAlex (W1 y W2) vinculados al mismo artículo de SciELO.
+
 ---
 
 ## Clasificación de categorías y matemáticas de las métricas
 
 Los artículos se clasifican en cuatro categorías jerárquicas: **domain**, **field**, **subfield** y **topic**. Todas las métricas bibliométricas se calculan y normalizan dentro de cada categoría y año de publicación. Esto permite comparar revistas de diferentes áreas de manera justa, ya que cada revista se evalúa en relación a su grupo de referencia.
+
+### Leyenda de símbolos
+
+- $c$: categoría (domain, field, subfield o topic)
+- $y$: año de publicación
+- $j$: revista
+- $w$: ventana de citas en años (ej: 2, 3, 5)
+- $i$: índice de publicación
+- $N$: cantidad de publicaciones
+- $C$: cantidad de citas
+- $\bar{C}$: promedio de citas por publicación
+- $Q_p$: función percentil en el percentil $p$
+- $p$: percentil usado para el cálculo del umbral (99, 95, 90, 50)
+- $q$: top en porcentaje (1, 5, 10, 50), con $q=100-p$
 
 ### Normalización por categoría y año
 
@@ -217,10 +264,19 @@ Para cada categoría $c$ y año $y$, calculamos:
 
 - Total de publicaciones: $N_{c,y}$
 - Total de citas: $C_{c,y}$
-- Promedio de citas por publicación: $\bar{C}_{c,y} = \frac{C_{c,y}}{N_{c,y}}$
-- Total y promedio de citas en ventanas de tiempo $w$:
+- Promedio de citas por publicación:
+
+$$
+\bar{C}_{c,y} = \frac{C_{c,y}}{N_{c,y}}
+$$
+
+- Citas en la ventana de tiempo $w$:
   - $C_{c,y}^{(w)}$: total de citas en la ventana $w$
-  - $\bar{C}_{c,y}^{(w)} = \frac{C_{c,y}^{(w)}}{N_{c,y}}$
+- Promedio de citas en la ventana de tiempo $w$:
+
+$$
+\bar{C}_{c,y}^{(w)} = \frac{C_{c,y}^{(w)}}{N_{c,y}}
+$$
 
 ### Métricas de revistas
 
@@ -228,10 +284,19 @@ Para cada revista $j$ en la categoría $c$ y año $y$:
 
 - Total de publicaciones: $N_{j,c,y}$
 - Total de citas: $C_{j,c,y}$
-- Promedio de citas por publicación: $\bar{C}_{j,c,y} = \frac{C_{j,c,y}}{N_{j,c,y}}$
-- Citas en ventanas de tiempo $w$:
+- Promedio de citas por publicación:
+
+$$
+\bar{C}_{j,c,y} = \frac{C_{j,c,y}}{N_{j,c,y}}
+$$
+
+- Citas en la ventana de tiempo $w$:
   - $C_{j,c,y}^{(w)}$: total de citas en la ventana $w$
-  - $\bar{C}_{j,c,y}^{(w)} = \frac{C_{j,c,y}^{(w)}}{N_{j,c,y}}$
+- Promedio de citas en la ventana de tiempo $w$:
+
+$$
+\bar{C}_{j,c,y}^{(w)} = \frac{C_{j,c,y}^{(w)}}{N_{j,c,y}}
+$$
 
 ### Impacto normalizado
 
@@ -342,9 +407,14 @@ print(unmatched.head())
 print(f"Total no emparejados: {len(unmatched)}")
 ```
 
-Este enfoque permite una auditoría transparente y detallada de las brechas de cobertura, sin necesidad de redirigir o analizar logs.
+Ejemplo de salida real de `unmatched.head()` (fixture de integración):
 
-## Fuentes de Datos
+| work_id      | publication_year | doi         | citations_total | domain | field | subfield | topic |
+|:-------------|-----------------:|:------------|----------------:|:-------|:------|:---------|:------|
+| scielo:S0002 |             2024 | 10.1001/999 |               0 |        |       |          |       |
 
-- **OpenAlex**: Los datos se obtienen del snapshot de OpenAlex, específicamente del subconjunto SciELO. Ver: https://docs.openalex.org/download-all-data/openalex-snapshot
-- **SciELO**: Los datos se obtienen de un volcado MongoDB de la base ArticleMeta (infraestructura interna de SciELO).
+## Referencias
+
+- Las métricas de posicionamiento bibliométrico y los indicadores percentílicos de este proyecto fueron inspirados en la documentación de indicadores del Leiden Ranking (CWTS Leiden Ranking): https://traditional.leidenranking.com/information/indicators
+- El mapeo taxonómico utilizado para las categorías de OpenAlex (domain, field, subfield, topic) se basó en el repositorio de clasificación de temas de OpenAlex: https://github.com/ourresearch/openalex-topic-classification
+- Se consultaron detalles metodológicos adicionales del sistema de clasificación de temas de OpenAlex en el documento metodológico público: https://docs.google.com/document/d/1bDopkhuGieQ4F8gGNj7sEc8WSE8mvLZS/edit#heading=h.5w2tb5fcg77r
