@@ -196,6 +196,19 @@ class ParquetAdapter(BaseAdapter):
             if df_journals.empty:
                 return df_journals
 
+            # Check for multiple ISSNs per source_id
+            issn_check_query = f"""
+            SELECT source_id, COUNT(DISTINCT source_issn_l) as issn_count
+            FROM {self.table_name}
+            WHERE publication_year = ? AND {level_col} = ? AND source_id IS NOT NULL
+            GROUP BY source_id
+            HAVING ISSN_L > 1
+            """
+            inconsistent_issns = self.con.execute(issn_check_query, [year, cat_id]).fetchall()
+            if inconsistent_issns:
+                for row in inconsistent_issns:
+                    logger.warning(f"Journal {row[0]} has {row[1]} distinct ISSNs in category {cat_id} ({year})")
+
             df_multilingual = self._compute_multilingual_flag_by_scielo_merge(year, level, cat_id)
             if df_multilingual.empty:
                 df_journals["is_journal_multilingual"] = 0
