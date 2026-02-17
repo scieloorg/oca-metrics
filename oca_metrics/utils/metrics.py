@@ -1,6 +1,11 @@
-from typing import Any, Dict, List, Optional
-import re
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional
+)
 
+import re
 import numpy as np
 import pandas as pd
 
