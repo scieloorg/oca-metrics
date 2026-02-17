@@ -68,15 +68,15 @@ class ParquetAdapter(BaseAdapter):
             "source_id as journal_id",
             "ANY_VALUE(source_issn_l) as journal_issn",
             "COUNT(*) as journal_publications_count",
-            "SUM(citations_total) as journal_citations_total",
-            "AVG(citations_total) as journal_citations_mean",
+            "SUM(COALESCE(citations_total, 0)) as journal_citations_total",
+            "AVG(COALESCE(citations_total, 0)) as journal_citations_mean",
         ]
-        select_cols.extend([f"SUM(citations_window_{w}y) as citations_window_{w}y" for w in windows])
+        select_cols.extend([f"SUM(COALESCE(citations_window_{w}y, 0)) as citations_window_{w}y" for w in windows])
         select_cols.extend(
-            [f"SUM(CASE WHEN citations_window_{w}y >= 1 THEN 1 ELSE 0 END) as citations_window_{w}y_works" for w in windows]
+            [f"SUM(CASE WHEN COALESCE(citations_window_{w}y, 0) >= 1 THEN 1 ELSE 0 END) as citations_window_{w}y_works" for w in windows]
         )
-        select_cols.extend([f"SUM({c}) as {c}" for c in self.yearly_citation_cols])
-        select_cols.extend([f"AVG(citations_window_{w}y) as journal_citations_mean_window_{w}y" for w in windows])
+        select_cols.extend([f"SUM(COALESCE({c}, 0)) as {c}" for c in self.yearly_citation_cols])
+        select_cols.extend([f"AVG(COALESCE(citations_window_{w}y, 0)) as journal_citations_mean_window_{w}y" for w in windows])
         select_cols.extend(top_counts_sql)
         return select_cols
 
@@ -134,10 +134,10 @@ class ParquetAdapter(BaseAdapter):
         query = f"""
         SELECT 
             COUNT(*) as total_docs,
-            SUM(citations_total) as total_citations,
-            AVG(citations_total) as mean_citations,
-            {", ".join([f"SUM(citations_window_{w}y) as total_citations_window_{w}y" for w in windows])},
-            {", ".join([f"AVG(citations_window_{w}y) as mean_citations_window_{w}y" for w in windows])}
+            SUM(COALESCE(citations_total, 0)) as total_citations,
+            AVG(COALESCE(citations_total, 0)) as mean_citations,
+            {", ".join([f"SUM(COALESCE(citations_window_{w}y, 0)) as total_citations_window_{w}y" for w in windows])},
+            {", ".join([f"AVG(COALESCE(citations_window_{w}y, 0)) as mean_citations_window_{w}y" for w in windows])}
         FROM {self.table_name}
         WHERE publication_year = ? AND {level_col} = ?
         """
