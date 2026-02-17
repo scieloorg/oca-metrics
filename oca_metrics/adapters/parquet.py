@@ -68,15 +68,15 @@ class ParquetAdapter(BaseAdapter):
             "source_id as journal_id",
             "ANY_VALUE(source_issn_l) as journal_issn",
             "COUNT(*) as journal_publications_count",
-            "SUM(citations_total) as journal_citations_total",
-            "AVG(citations_total) as journal_citations_mean",
+            "SUM(COALESCE(citations_total, 0)) as journal_citations_total",
+            "AVG(COALESCE(citations_total, 0)) as journal_citations_mean",
         ]
-        select_cols.extend([f"SUM(citations_window_{w}y) as citations_window_{w}y" for w in windows])
+        select_cols.extend([f"SUM(COALESCE(citations_window_{w}y, 0)) as citations_window_{w}y" for w in windows])
         select_cols.extend(
-            [f"SUM(CASE WHEN citations_window_{w}y >= 1 THEN 1 ELSE 0 END) as citations_window_{w}y_works" for w in windows]
+            [f"SUM(CASE WHEN COALESCE(citations_window_{w}y, 0) >= 1 THEN 1 ELSE 0 END) as citations_window_{w}y_works" for w in windows]
         )
-        select_cols.extend([f"SUM({c}) as {c}" for c in self.yearly_citation_cols])
-        select_cols.extend([f"AVG(citations_window_{w}y) as journal_citations_mean_window_{w}y" for w in windows])
+        select_cols.extend([f"SUM(COALESCE({c}, 0)) as {c}" for c in self.yearly_citation_cols])
+        select_cols.extend([f"AVG(COALESCE(citations_window_{w}y, 0)) as journal_citations_mean_window_{w}y" for w in windows])
         select_cols.extend(top_counts_sql)
         return select_cols
 
@@ -134,10 +134,10 @@ class ParquetAdapter(BaseAdapter):
         query = f"""
         SELECT 
             COUNT(*) as total_docs,
-            SUM(citations_total) as total_citations,
-            AVG(citations_total) as mean_citations,
-            {", ".join([f"SUM(citations_window_{w}y) as total_citations_window_{w}y" for w in windows])},
-            {", ".join([f"AVG(citations_window_{w}y) as mean_citations_window_{w}y" for w in windows])}
+            SUM(COALESCE(citations_total, 0)) as total_citations,
+            AVG(COALESCE(citations_total, 0)) as mean_citations,
+            {", ".join([f"SUM(COALESCE(citations_window_{w}y, 0)) as total_citations_window_{w}y" for w in windows])},
+            {", ".join([f"AVG(COALESCE(citations_window_{w}y, 0)) as mean_citations_window_{w}y" for w in windows])}
         FROM {self.table_name}
         WHERE publication_year = ? AND {level_col} = ?
         """
@@ -157,13 +157,18 @@ class ParquetAdapter(BaseAdapter):
         threshold_cols = []
         for p in target_percentiles:
             pct_val = 100 - p
+            # top 1% -> p=99 -> quantile_disc(..., 0.99)
+            # top 5% -> p=95 -> quantile_disc(..., 0.95)
+            # ...
+            # top 50% -> p=50 -> quantile_disc(..., 0.50)
+            q = p / 100.0
             threshold_cols.append(
-                f"CAST(quantile_cont(citations_total, {p/100.0}) AS INT) + 1 as {build_threshold_key(pct_val)}"
+                f"quantile_disc(COALESCE(citations_total, 0), {q}) as {build_threshold_key(pct_val)}"
             )
 
             for w in windows:
                 threshold_cols.append(
-                    f"CAST(quantile_cont(citations_window_{w}y, {p/100.0}) AS INT) + 1 as {build_threshold_key(pct_val, w)}"
+                    f"quantile_disc(COALESCE(citations_window_{w}y, 0), {q}) as {build_threshold_key(pct_val, w)}"
                 )
         
         query = f"SELECT {', '.join(threshold_cols)} FROM {self.table_name} WHERE publication_year = ? AND {level_col} = ?"
@@ -190,6 +195,19 @@ class ParquetAdapter(BaseAdapter):
             df_journals = self.con.execute(query, [year, cat_id]).df()
             if df_journals.empty:
                 return df_journals
+
+            # Check for multiple ISSNs per source_id
+            issn_check_query = f"""
+            SELECT source_id, COUNT(DISTINCT source_issn_l) as issn_count
+            FROM {self.table_name}
+            WHERE publication_year = ? AND {level_col} = ? AND source_id IS NOT NULL
+            GROUP BY source_id
+            HAVING ISSN_L > 1
+            """
+            inconsistent_issns = self.con.execute(issn_check_query, [year, cat_id]).fetchall()
+            if inconsistent_issns:
+                for row in inconsistent_issns:
+                    logger.warning(f"Journal {row[0]} has {row[1]} distinct ISSNs in category {cat_id} ({year})")
 
             df_multilingual = self._compute_multilingual_flag_by_scielo_merge(year, level, cat_id)
             if df_multilingual.empty:
