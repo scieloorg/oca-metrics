@@ -202,7 +202,7 @@ class ParquetAdapter(BaseAdapter):
             FROM {self.table_name}
             WHERE publication_year = ? AND {level_col} = ? AND source_id IS NOT NULL
             GROUP BY source_id
-            HAVING ISSN_L > 1
+            HAVING issn_count > 1
             """
             inconsistent_issns = self.con.execute(issn_check_query, [year, cat_id]).fetchall()
             if inconsistent_issns:
