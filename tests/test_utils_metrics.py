@@ -13,6 +13,8 @@ from oca_metrics.utils.metrics import (
     build_threshold_key,
     compute_share_pct,
     compute_cohort_impact,
+    compute_impact_comparability_reference,
+    compute_impact_is_comparable,
     compute_percentiles,
     extract_threshold_pct_values,
 )
@@ -50,8 +52,8 @@ class TestUtilsMetrics(unittest.TestCase):
         self.assertIn("category_citations_mean_window_2y", schema)
         self.assertIn("top_1pct_all_time_citations_threshold", schema)
         self.assertIn("top_50pct_window_3y_publications_share_pct", schema)
-        self.assertIn("country", schema)
-        self.assertIn("collection", schema)
+        self.assertIn("cohort_impact_is_comparable", schema)
+        self.assertIn("cohort_impact_window_2y_is_comparable", schema)
         self.assertIn("is_scopus", schema)
         self.assertIn("is_journal_multilingual", schema)
         self.assertIn("citations_2023", schema)
@@ -156,10 +158,11 @@ class TestUtilsMetrics(unittest.TestCase):
         df = load_global_metadata("non_existent.xlsx")
         self.assertTrue(df.empty)
 
-    def test_compute_normalized_impact(self):
-        self.assertEqual(compute_normalized_impact(10, 5), 2.0)
-        self.assertEqual(compute_normalized_impact(0, 5), 0.0)
-        self.assertEqual(compute_normalized_impact(10, 0), 0.0)
+    def test_compute_cohort_impact(self):
+        self.assertEqual(compute_cohort_impact(10, 5), 2.0)
+        self.assertEqual(compute_cohort_impact(0, 5), 0.0)
+        self.assertEqual(compute_cohort_impact(10, 0), 0.0)
+        self.assertEqual(compute_cohort_impact(0, 0), 0.0)
 
     def test_compute_percentiles(self):
         citations = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
@@ -197,6 +200,28 @@ class TestUtilsMetrics(unittest.TestCase):
         den = pd.Series([4, 0, None, 8])
         res = compute_share_pct(num, den)
         self.assertEqual(list(res), [50.0, 0.0, 0.0, 50.0])
+
+    def test_compute_impact_comparability_reference(self):
+        publication_counts = pd.Series([2, 4, 10])
+        ref = compute_impact_comparability_reference(
+            publication_counts,
+            min_publications_abs=8,
+            median_ratio=0.5,
+        )
+        self.assertEqual(ref["cohort_journal_publications_median"], 4.0)
+        self.assertEqual(ref["cohort_impact_min_pubs_required"], 8)
+
+        ref2 = compute_impact_comparability_reference(
+            publication_counts,
+            min_publications_abs=2,
+            median_ratio=2.0,
+        )
+        self.assertEqual(ref2["cohort_impact_min_pubs_required"], 8)
+
+    def test_compute_impact_is_comparable(self):
+        publication_counts = pd.Series([1, 8, 10, None])
+        flags = compute_impact_is_comparable(publication_counts, min_required=8)
+        self.assertEqual(list(flags), [0, 1, 1, 0])
 
 
 if __name__ == '__main__':

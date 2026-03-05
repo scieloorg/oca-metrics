@@ -12,9 +12,13 @@ from oca_metrics.utils.constants import (
     METADATA_TEXT_COLUMNS,
 )
 from oca_metrics.utils.metrics import (
+    DEFAULT_IMPACT_MIN_PUBS_ABS,
+    DEFAULT_IMPACT_MIN_PUBS_MEDIAN_RATIO,
     build_threshold_key,
     compute_share_pct,
     compute_cohort_impact,
+    compute_impact_comparability_reference,
+    compute_impact_is_comparable,
 )
 
 
@@ -27,9 +31,17 @@ TARGET_CITATION_PERCENTILES = [99, 95, 90, 50]
 class MetricsEngine:
     """Metrics computation engine that uses a data adapter."""
 
-    def __init__(self, adapter: BaseAdapter, target_percentiles: Sequence[int] = None):
+    def __init__(
+        self,
+        adapter: BaseAdapter,
+        target_percentiles: Sequence[int] = None,
+        impact_min_pubs_abs: int = DEFAULT_IMPACT_MIN_PUBS_ABS,
+        impact_min_pubs_median_ratio: float = DEFAULT_IMPACT_MIN_PUBS_MEDIAN_RATIO,
+    ):
         self.adapter = adapter
         self.target_percentiles = target_percentiles or TARGET_CITATION_PERCENTILES
+        self.impact_min_pubs_abs = impact_min_pubs_abs
+        self.impact_min_pubs_median_ratio = impact_min_pubs_median_ratio
 
     def process_category(self, year: int, level: str, cat_id: str, windows: Sequence[int], df_meta: pd.DataFrame = None) -> Optional[pd.DataFrame]:
         """Processes a single category and returns enriched metrics per journal."""
@@ -52,8 +64,20 @@ class MetricsEngine:
         df_journals['category_publications_count'] = baseline_res['total_docs']
         df_journals['category_citations_total'] = baseline_res['total_citations']
         df_journals['category_citations_mean'] = baseline_res['mean_citations']
-        df_journals['journal_impact_normalized'] = df_journals['journal_citations_mean'].apply(
-            lambda x: compute_normalized_impact(x, baseline_res['mean_citations'])
+        comparability_ref = compute_impact_comparability_reference(
+            df_journals['journal_publications_count'],
+            min_publications_abs=self.impact_min_pubs_abs,
+            median_ratio=self.impact_min_pubs_median_ratio,
+        )
+        min_required = int(comparability_ref['cohort_impact_min_pubs_required'])
+        df_journals['cohort_journal_publications_median'] = comparability_ref['cohort_journal_publications_median']
+        df_journals['cohort_impact_min_pubs_required'] = min_required
+        df_journals['cohort_impact_is_comparable'] = compute_impact_is_comparable(
+            df_journals['journal_publications_count'],
+            min_required=min_required,
+        )
+        df_journals['journal_impact_cohort'] = df_journals['journal_citations_mean'].apply(
+            lambda x: compute_cohort_impact(x, baseline_res['mean_citations'])
         )
         
         for w in windows:
@@ -62,6 +86,7 @@ class MetricsEngine:
             df_journals[f'journal_impact_cohort_window_{w}y'] = df_journals[f'journal_citations_mean_window_{w}y'].apply(
                 lambda x: compute_cohort_impact(x, baseline_res[f'mean_citations_window_{w}y'])
             )
+            df_journals[f'cohort_impact_window_{w}y_is_comparable'] = df_journals['cohort_impact_is_comparable']
             
         for p in self.target_percentiles:
             pct_val = 100 - p
@@ -98,7 +123,7 @@ class MetricsEngine:
 
         if available_meta_cols:
             df_journals = pd.merge(
-                df_journals, 
+                df_journals,
                 df_meta[available_meta_cols],
                 on=['journal_id', 'publication_year'],
                 how='left',

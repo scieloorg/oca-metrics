@@ -9,6 +9,10 @@ from oca_metrics.core import MetricsEngine
 from oca_metrics.utils.csv_schema import (
     get_csv_schema_order,
 )
+from oca_metrics.utils.metrics import (
+    DEFAULT_IMPACT_MIN_PUBS_ABS,
+    DEFAULT_IMPACT_MIN_PUBS_MEDIAN_RATIO,
+)
 from oca_metrics.utils.metadata import (
     load_global_metadata,
 )
@@ -36,6 +40,18 @@ def parse_args():
     parser.add_argument("--level", default="field", choices=["domain", "field", "subfield", "topic"])
     parser.add_argument("--category-id", type=str, default=None)
     parser.add_argument("--windows", type=int, nargs="+", default=[2, 3, 5])
+    parser.add_argument(
+        "--impact-min-pubs-abs",
+        type=int,
+        default=DEFAULT_IMPACT_MIN_PUBS_ABS,
+        help="Absolute minimum publications required for cohort impact comparability.",
+    )
+    parser.add_argument(
+        "--impact-min-pubs-median-ratio",
+        type=float,
+        default=DEFAULT_IMPACT_MIN_PUBS_MEDIAN_RATIO,
+        help="Dynamic minimum publications as a ratio of cohort median publications.",
+    )
     
     parser.add_argument("--output-file", type=str, default=None)
     parser.add_argument("--shorten-ids", action="store_true", help="Shorten OpenAlex IDs in output.")
@@ -61,7 +77,11 @@ def main():
     
     try:
         adapter = ParquetAdapter(args.parquet)
-        engine = MetricsEngine(adapter)
+        engine = MetricsEngine(
+            adapter,
+            impact_min_pubs_abs=args.impact_min_pubs_abs,
+            impact_min_pubs_median_ratio=args.impact_min_pubs_median_ratio,
+        )
     except Exception as e:
         logger.error(f"Failed to initialize engine: {e}")
         sys.exit(1)

@@ -11,6 +11,8 @@ import pandas as pd
 
 
 THRESHOLD_KEY_PATTERN = re.compile(r"^C_top(\d+)pct(?:_window_(\d+)y)?$")
+DEFAULT_IMPACT_MIN_PUBS_ABS = 8
+DEFAULT_IMPACT_MIN_PUBS_MEDIAN_RATIO = 0.5
 
 
 def compute_percentiles(citations: List[int], percentiles: List[float]) -> Dict[float, float]:
@@ -32,6 +34,41 @@ def compute_cohort_impact(journal_mean: float, category_mean: float) -> float:
         return 0.0
 
     return journal_mean / category_mean
+
+
+def compute_impact_comparability_reference(
+    publication_counts: pd.Series,
+    min_publications_abs: int = DEFAULT_IMPACT_MIN_PUBS_ABS,
+    median_ratio: float = DEFAULT_IMPACT_MIN_PUBS_MEDIAN_RATIO,
+) -> Dict[str, float]:
+    """
+    Compute cohort-level comparability reference values for impact metrics.
+
+    Rule:
+      min_required = max(min_publications_abs, ceil(median(publication_counts) * median_ratio))
+    """
+    counts = pd.to_numeric(publication_counts, errors="coerce").dropna()
+    cohort_median = float(counts.median()) if not counts.empty else 0.0
+
+    safe_abs = max(1, int(min_publications_abs))
+    safe_ratio = max(0.0, float(median_ratio))
+    ratio_required = int(np.ceil(cohort_median * safe_ratio))
+    min_required = max(safe_abs, ratio_required)
+
+    return {
+        "cohort_journal_publications_median": cohort_median,
+        "cohort_impact_min_pubs_required": min_required,
+    }
+
+
+def compute_impact_is_comparable(
+    publication_counts: pd.Series,
+    min_required: float,
+) -> pd.Series:
+    """Flag whether each journal has enough publications for comparable cohort impact."""
+    counts = pd.to_numeric(publication_counts, errors="coerce").fillna(0)
+    threshold = max(1, int(min_required))
+    return counts.ge(threshold).astype(int)
 
 
 def build_threshold_key(pct_val: int, window: Optional[int] = None) -> str:
