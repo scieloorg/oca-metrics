@@ -66,9 +66,14 @@ oca-prep extract-oa --base-dir /ruta/a/snapshots --output-dir ./oa-parquet
 ```
 
 #### 2. Procesamiento SciELO
-Carga y elimina duplicados (merge) de documentos SciELO.
+Carga y elimina duplicados (merge) de documentos SciELO. El comando asume un archivo JSONL por
+predeterminado; si trabajas con una exportación de MongoDB en formato BSON, especifica
+`--format bson`.
+
 ```bash
 oca-prep prepare-scielo --input articles.jsonl --output-jsonl scielo_merged.jsonl --strategies doi pid title
+# o, cuando la fuente es BSON:
+oca-prep prepare-scielo --input articles.bson --format bson --output-jsonl scielo_merged.jsonl --strategies doi pid title
 ```
 
 #### 3. Integración y Generación de Parquet Fusionado
@@ -97,7 +102,7 @@ Argumentos principales:
 
 Extracto de una ejecución real (`metrics_by_field.20260215.csv`, valores redondeados para facilitar la lectura y nombres de revistas anonimizados):
 
-| Categoría | Nivel | Revista | Año | SciELO | Publicaciones de la revista | Citas totales de la revista | Impacto normalizado de la revista | Porcentaje de publicaciones en el top 50% |
+| Categoría | Nivel | Revista | Año | SciELO | Publicaciones de la revista | Citas totales de la revista | Impacto de cohorte de la revista | Porcentaje de publicaciones en el top 50% |
 |:--|:--|:--|--:|--:|--:|--:|--:|--:|
 | Agricultural and Biological Sciences | field | Journal A | 2020 | 0 | 57 | 82.0 | 0.1217 | 10.53 |
 | Agricultural and Biological Sciences | field | Journal B | 2020 | 0 | 1895 | 2855.0 | 0.1274 | 12.14 |
@@ -133,9 +138,9 @@ El archivo Excel de metadatos globales (`--global-xlsx`) se utiliza para enrique
 | :--- | :--- | :--- |
 | **Info Revista** | `journal_title` | Título de la revista. |
 | | `journal_id` | Identificador OpenAlex de la revista (ej: S123456789). |
-| | `publisher_name` | Nombre de la editorial. |
+| | `journal_publisher` | Nombre de la editorial. |
 | | `journal_issn` | ISSNs asociados a la revista. |
-| | `country` | El país responsable de la revista. |
+| | `journal_country` | El país responsable de la revista. |
 | **Info SciELO** | `is_scielo` | Booleano que indica si la revista pertenece a la red SciELO. |
 | | `scielo_active_valid` | Estado de la revista en la red SciELO para el año dado. |
 | | `scielo_collection_acronym` | Acrónimo de la colección SciELO. |
@@ -156,8 +161,8 @@ El archivo Parquet de entrada sirve como fuente de los datos de publicación. De
 | | `is_merged` | Booleano que indica si el registro está fusionado. |
 | | `oa_individual_works` | JSON con detalles de los trabajos individuales (si está fusionado). |
 | | `all_work_ids` | Lista de todos los IDs de trabajos en OpenAlex cuando 'is_merged' es True. |
-| **Info Fuente** | `source_id` | Identificador de la fuente (revista), típicamente una URL de OpenAlex. |
-| | `source_issn_l` | ISSN-L de la revista. |
+| **Info Revista** | `journal_id` | Identificador de la revista, típicamente una URL de OpenAlex. |
+| | `journal_issn_l` | ISSN-L de la revista. |
 | | `scielo_collection` | Colección SciELO de la publicación. |
 | | `scielo_pid_v2` | PID v2 SciELO de la publicación. |
 | **Categorías** | `domain` | Categoría de dominio. |
@@ -182,10 +187,9 @@ El archivo CSV resultante contiene los indicadores bibliométricos computados, o
 | **Info Revista** | `journal_id` | OpenAlex ID (URL) de la revista. |
 | | `journal_issn` | ISSN-L de la revista. |
 | | `journal_title` | Título de la revista. |
-| | `country` | El país responsable de la revista. |
-| | `publisher_name` | Nombre de la editorial. |
-| | `scielo_collection_acronym` | Acrônimo de la colección SciELO. |
-| | `scielo_network_country` | País de la red SciELO. |
+| | `journal_country` | El país responsable de la revista. |
+| | `journal_publisher` | Nombre de la editorial. |
+| | `scielo_collection` | Acrónimo de la colección SciELO. |
 | | `scielo_active_valid` | Estado de la revista en SciELO. |
 | | `is_scielo` | Indicador si la revista está en SciELO. |
 | **Métricas Categoría** | `category_publications_count` | Total de publicaciones en la categoría en el año. |
@@ -196,11 +200,11 @@ El archivo CSV resultante contiene los indicadores bibliométricos computados, o
 | **Métricas Revista** | `journal_publications_count` | Total de publicaciones de la revista en el año. |
 | | `journal_citations_total` | Total de citas recibidas por la revista. |
 | | `journal_citations_mean` | Promedio de citas por publicación de la revista. |
-| | `journal_impact_normalized` | Impacto normalizado (Promedio Revista / Promedio Categoría). |
+| | `journal_impact_cohort` | Impacto de cohorte (Promedio Revista / Promedio Categoría). |
 | | `citations_window_{w}y` | Total de citas recibidas en la ventana de {w} años. |
 | | `citations_window_{w}y_works` | Número de trabajos con al menos 1 cita en la ventana. |
 | | `journal_citations_mean_window_{w}y` | Promedio de citas en la ventana de {w} años. |
-| | `journal_impact_normalized_window_{w}y` | Impacto normalizado en la ventana de {w} años. |
+| | `journal_impact_cohort_window_{w}y` | Impacto de cohorte en la ventana de {w} años. |
 | **Métricas Percentil** | `top_{pct}pct_all_time_citations_threshold` | Umbral de citas para el top {pct}% (todo el tiempo). |
 | | `top_{pct}pct_all_time_publications_count` | Número de publicaciones en el top {pct}% (todo el tiempo). |
 | | `top_{pct}pct_all_time_publications_share_pct` | Porcentaje de publicaciones en el top {pct}% (todo el tiempo). |
@@ -253,7 +257,7 @@ En este ejemplo, el registro final consolida dos trabajos de OpenAlex (W1 y W2) 
 
 ## Clasificación de categorías y matemáticas de las métricas
 
-Los artículos se clasifican en cuatro categorías jerárquicas: **domain**, **field**, **subfield** y **topic**. Todas las métricas bibliométricas se calculan y normalizan dentro de cada categoría y año de publicación. Esto permite comparar revistas de diferentes áreas de manera justa, ya que cada revista se evalúa en relación a su grupo de referencia.
+Los artículos se clasifican en cuatro categorías jerárquicas: **domain**, **field**, **subfield** y **topic**. Todas las métricas bibliométricas se calculan dentro de cada categoría y año de publicación. Esto permite comparar revistas de diferentes áreas de manera justa, ya que cada revista se evalúa en relación a su grupo de referencia.
 
 ### Leyenda de símbolos
 
@@ -268,6 +272,7 @@ Los artículos se clasifican en cuatro categorías jerárquicas: **domain**, **f
 - $Q_p$: función percentil en el percentil $p$
 - $p$: percentil usado para el cálculo del umbral (99, 95, 90, 50)
 - $q$: top en porcentaje (1, 5, 10, 50), con $q=100-p$
+- cohorte $(c,y)$: conjunto de referencia formado por los documentos de la categoría $c$ y el año de publicación $y$ (`category_id`, `publication_year`)
 
 ### Normalización por categoría y año
 
@@ -309,9 +314,9 @@ $$
 \bar{C}_{j,c,y}^{(w)} = \frac{C_{j,c,y}^{(w)}}{N_{j,c,y}}
 $$
 
-### Impacto normalizado
+### Impacto de cohorte
 
-El impacto normalizado de la revista se calcula con protección para denominador cero:
+El impacto de cohorte de la revista se calcula con protección para denominador cero:
 
 $$
 I_{j,c,y} =

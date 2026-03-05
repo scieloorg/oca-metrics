@@ -66,9 +66,14 @@ oca-prep extract-oa --base-dir /caminho/snapshots --output-dir ./oa-parquet
 ```
 
 #### 2. Processamento SciELO
-Carrega e remove duplicatas (merge) de documentos SciELO.
+Carrega e remove duplicatas (merge) de documentos SciELO. O comando assume que a entrada é um
+arquivo JSONL por padrão; se você estiver usando um dump do MongoDB em formato BSON, informe
+`--format bson`.
+
 ```bash
 oca-prep prepare-scielo --input articles.jsonl --output-jsonl scielo_merged.jsonl --strategies doi pid title
+# ou, quando a fonte for BSON:
+oca-prep prepare-scielo --input articles.bson --format bson --output-jsonl scielo_merged.jsonl --strategies doi pid title
 ```
 
 #### 3. Integração e Geração de Parquet Mesclado
@@ -97,7 +102,7 @@ Argumentos principais:
 
 Trecho de uma execução real (`metrics_by_field.20260215.csv`, valores arredondados para leitura e nomes de periódicos anonimizados):
 
-| Categoria | Nível | Periódico | Ano | SciELO | Publicações do periódico | Citações totais do periódico | Impacto normalizado do periódico | Percentual de publicações no top 50% |
+| Categoria | Nível | Periódico | Ano | SciELO | Publicações do periódico | Citações totais do periódico | Impacto de coorte do periódico | Percentual de publicações no top 50% |
 |:--|:--|:--|--:|--:|--:|--:|--:|--:|
 | Agricultural and Biological Sciences | field | Journal A | 2020 | 0 | 57 | 82.0 | 0.1217 | 10.53 |
 | Agricultural and Biological Sciences | field | Journal B | 2020 | 0 | 1895 | 2855.0 | 0.1274 | 12.14 |
@@ -133,9 +138,9 @@ O arquivo Excel de metadados globais (`--global-xlsx`) é usado para enriquecer 
 | :--- | :--- | :--- |
 | **Info Periódico** | `journal_title` | O título do periódico. |
 | | `journal_id` | O identificador OpenAlex do periódico (ex: S123456789). |
-| | `publisher_name` | O nome da editora. |
+| | `journal_publisher` | O nome da editora. |
 | | `journal_issn` | Os ISSNs associados ao periódico. |
-| | `country` | O país responsável pelo periódico. |
+| | `journal_country` | O país responsável pelo periódico. |
 | **Info SciELO** | `is_scielo` | Booleano indicando se o periódico pertence à rede SciELO. |
 | | `scielo_active_valid` | Status do periódico na rede SciELO para o ano dado. |
 | | `scielo_collection_acronym` | Acrônimo da coleção SciELO. |
@@ -156,8 +161,8 @@ O arquivo Parquet de entrada serve como fonte dos dados de publicação. Ele dev
 | | `is_merged` | Booleano indicando se o registro é mesclado. |
 | | `oa_individual_works` | JSON com detalhes dos trabalhos individuais (se mesclado). |
 | | `all_work_ids` | Lista de todos os IDs dos trabalhos na base OpenAlex quando 'is_merged' for True. |
-| **Info Fonte** | `source_id` | Identificador da fonte (periódico), tipicamente uma URL OpenAlex. |
-| | `source_issn_l` | ISSN-L do periódico. |
+| **Info Periódico** | `journal_id` | Identificador do periódico, tipicamente uma URL OpenAlex. |
+| | `journal_issn_l` | ISSN-L do periódico. |
 | | `scielo_collection` | Coleção SciELO da publicação. |
 | | `scielo_pid_v2` | PID v2 SciELO da publicação. |
 | **Categorias** | `domain` | Categoria de domínio. |
@@ -182,12 +187,11 @@ O arquivo CSV resultante contém os indicadores bibliométricos computados, orga
 | **Info Periódico** | `journal_id` | OpenAlex ID (URL) do periódico. |
 | | `journal_issn` | ISSN-L do periódico. |
 | | `journal_title` | Título do periódico. |
-| | `country` | O país responsável pelo periódico. |
-| | `publisher_name` | Nome da editora. |
-| | `scielo_collection_acronym` | Acrônimo da coleção SciELO. |
-| | `scielo_network_country` | País da rede SciELO. |
+| | `journal_country` | O país responsável pelo periódico. |
+| | `journal_publisher` | Nome da editora. |
+| | `scielo_collection` | Acrônimo da coleção SciELO. |
 | | `scielo_active_valid` | Status do periódico no SciELO. |
-| | `is_scielo` | Indicador se o periódico está no SciELO. |
+| | `is_scielo` | Indicador binário (0/1) se o periódico está no SciELO. |
 | **Métricas Categoria** | `category_publications_count` | Total de publicações na categoria no ano. |
 | | `category_citations_total` | Total de citações recebidas pela categoria. |
 | | `category_citations_mean` | Média de citações por publicação na categoria. |
@@ -196,11 +200,15 @@ O arquivo CSV resultante contém os indicadores bibliométricos computados, orga
 | **Métricas Periódico** | `journal_publications_count` | Total de publicações do periódico no ano. |
 | | `journal_citations_total` | Total de citações recebidas pelo periódico. |
 | | `journal_citations_mean` | Média de citações por publicação do periódico. |
-| | `journal_impact_normalized` | Impacto normalizado (Média Periódico / Média Categoria). |
+| | `journal_impact_cohort` | Impacto de coorte (Média Periódico / Média Categoria). |
 | | `citations_window_{w}y` | Total de citações recebidas na janela de {w} anos. |
 | | `citations_window_{w}y_works` | Número de trabalhos com ao menos 1 citação na janela. |
 | | `journal_citations_mean_window_{w}y` | Média de citações na janela de {w} anos. |
-| | `journal_impact_normalized_window_{w}y` | Impacto normalizado na janela de {w} anos. |
+| | `journal_impact_cohort_window_{w}y` | Impacto de coorte na janela de {w} anos. |
+| | `cohort_journal_publications_median` | Mediana de publicações por periódico na coorte (categoria + ano). |
+| | `cohort_impact_min_pubs_required` | Mínimo de publicações exigido para comparabilidade do impacto na coorte. |
+| | `cohort_impact_is_comparable` | Indicador (0/1) se o impacto do periódico é comparável na coorte. |
+| | `cohort_impact_window_{w}y_is_comparable` | Indicador (0/1) se o impacto de coorte em janela é comparável. |
 | **Métricas Percentil** | `top_{pct}pct_all_time_citations_threshold` | Threshold de citações para o top {pct}% (todo o tempo). |
 | | `top_{pct}pct_all_time_publications_count` | Número de publicações no top {pct}% (todo o tempo). |
 | | `top_{pct}pct_all_time_publications_share_pct` | Percentual de publicações no top {pct}% (todo o tempo). |
@@ -209,6 +217,7 @@ O arquivo CSV resultante contém os indicadores bibliométricos computados, orga
 | | `top_{pct}pct_window_{w}y_publications_share_pct` | Percentual de publicações no top {pct}% na janela de {w} anos. |
 
 > **Nota**: `{w}` representa o tamanho da janela (ex: 2, 3, 5) e `{pct}` representa o percentil (ex: 1, 5, 10, 50).
+> **Padrão de booleanos no CSV de saída**: todas as colunas de indicador binário são codificadas como inteiros `0`/`1`.
 
 ---
 
@@ -253,7 +262,7 @@ Neste exemplo, o registro final consolida dois trabalhos OpenAlex (W1 e W2) vinc
 
 ## Classificação de categorias e matemática das métricas
 
-Os artigos são classificados em quatro categorias hierárquicas: **domain**, **field**, **subfield** e **topic**. Todas as métricas bibliométricas são calculadas e normalizadas dentro de cada categoria e ano de publicação. Isso permite comparar periódicos de áreas diferentes de forma justa, pois cada periódico é avaliado em relação ao seu grupo de referência.
+Os artigos são classificados em quatro categorias hierárquicas: **domain**, **field**, **subfield** e **topic**. Todas as métricas bibliométricas são calculadas dentro de cada categoria e ano de publicação. Isso permite comparar periódicos de áreas diferentes de forma justa, pois cada periódico é avaliado em relação ao seu grupo de referência.
 
 ### Legenda de símbolos
 
@@ -268,6 +277,7 @@ Os artigos são classificados em quatro categorias hierárquicas: **domain**, **
 - $Q_p$: função de percentil no percentil $p$
 - $p$: percentil usado no cálculo do threshold (99, 95, 90, 50)
 - $q$: top em percentual (1, 5, 10, 50), com $q=100-p$
+- coorte $(c,y)$: conjunto de referência formado pelos documentos da categoria $c$ e ano de publicação $y$ (`category_id`, `publication_year`)
 
 ### Normalização por categoria e ano
 
@@ -309,9 +319,9 @@ $$
 \bar{C}_{j,c,y}^{(w)} = \frac{C_{j,c,y}^{(w)}}{N_{j,c,y}}
 $$
 
-### Impacto normalizado
+### Impacto de coorte
 
-O impacto normalizado do periódico é calculado com proteção para denominador zero:
+O impacto de coorte do periódico é calculado com proteção para denominador zero:
 
 $$
 I_{j,c,y} =
@@ -330,6 +340,32 @@ I_{j,c,y}^{(w)} =
 \frac{\bar{C}_{j,c,y}^{(w)}}{\bar{C}_{c,y}^{(w)}}, & \text{caso contrário}
 \end{cases}
 $$
+
+### Flag de comparabilidade do impacto de coorte
+
+Os valores de impacto são sempre calculados, mas uma flag de comparabilidade é emitida com base no tamanho da amostra:
+
+$$
+\tilde{N}_{c,y} = \operatorname{median}_j(N_{j,c,y})
+$$
+
+$$
+N_{\min,c,y} = \max\left(N_{\text{abs}}, \left\lceil \alpha \cdot \tilde{N}_{c,y}\right\rceil\right)
+$$
+
+$$
+F_{j,c,y} =
+\begin{cases}
+1, & \text{se } N_{j,c,y} \ge N_{\min,c,y} \\
+0, & \text{caso contrário}
+\end{cases}
+$$
+
+Onde:
+- $N_{\text{abs}}$: piso absoluto de publicações mínimas (padrão: 8)
+- $\alpha$: razão aplicada sobre a mediana da coorte (padrão: 0.5)
+
+A mesma flag é usada para impacto de coorte em janelas, pois o número de publicações não muda com a janela de citação.
 
 ### Percentis e thresholds
 
