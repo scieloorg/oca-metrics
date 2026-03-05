@@ -99,6 +99,8 @@ def test_full_pipeline_with_fixtures(pipeline_env):
 
     df = pd.read_parquet(final_parquet)
     assert len(df) > 0, "Final merged Parquet is empty"
+    assert "is_journal_oa" in df.columns
+    assert df["is_journal_oa"].notna().any()
     
     matches = df[df["scielo_pid_v2"].notna() & (df["scielo_pid_v2"].apply(len) > 0)]
     
@@ -133,6 +135,7 @@ def test_full_pipeline_with_fixtures(pipeline_env):
         
         assert df_metrics is not None
         assert not df_metrics.empty
+        assert "is_journal_oa" in df_metrics.columns
         
         print("\n" + "="*50)
         print(f"METRICS RESULTS (Year: {best_year}, Category: {cat_id})")

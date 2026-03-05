@@ -1,6 +1,6 @@
 import unittest
-import pandas as pd
 import os
+import pandas as pd
 
 from oca_metrics.utils.constants import XLSX_TO_INTERNAL_COLUMN_MAP
 from oca_metrics.utils.csv_schema import (
@@ -54,7 +54,10 @@ class TestUtilsMetrics(unittest.TestCase):
         self.assertIn("top_50pct_window_3y_publications_share_pct", schema)
         self.assertIn("cohort_impact_is_comparable", schema)
         self.assertIn("cohort_impact_window_2y_is_comparable", schema)
+        self.assertIn("journal_country", schema)
+        self.assertIn("scielo_collection", schema)
         self.assertIn("is_scopus", schema)
+        self.assertIn("is_journal_oa", schema)
         self.assertIn("is_journal_multilingual", schema)
         self.assertIn("citations_2023", schema)
         self.assertIn("citations_2024", schema)

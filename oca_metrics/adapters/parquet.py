@@ -70,7 +70,9 @@ class ParquetAdapter(BaseAdapter):
             "COUNT(*) as journal_publications_count",
             "SUM(COALESCE(citations_total, 0)) as journal_citations_total",
             "AVG(COALESCE(citations_total, 0)) as journal_citations_mean",
+            "MAX(COALESCE(is_journal_oa, 0))::INTEGER as is_journal_oa",
         ]
+
         select_cols.extend([f"SUM(COALESCE(citations_window_{w}y, 0)) as citations_window_{w}y" for w in windows])
         select_cols.extend(
             [f"SUM(CASE WHEN COALESCE(citations_window_{w}y, 0) >= 1 THEN 1 ELSE 0 END) as citations_window_{w}y_works" for w in windows]

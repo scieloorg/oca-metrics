@@ -155,7 +155,10 @@ class MetricsEngine:
             (df_journals['is_scielo'] == 1)
             & (df_journals['scielo_active_valid'] == 1)
         )
-        df_journals['collection'] = df_journals['scielo_collection_acronym'].where(has_scielo_collection, "")
+        df_journals['scielo_collection'] = df_journals['scielo_collection_acronym'].where(has_scielo_collection, "")
+        df_journals['is_journal_oa'] = pd.to_numeric(
+            _series_or_default('is_journal_oa', 0), errors='coerce'
+        ).fillna(0).astype(int)
         df_journals['is_journal_multilingual'] = pd.to_numeric(
             _series_or_default('is_journal_multilingual', 0), errors='coerce'
         ).fillna(0).astype(int)

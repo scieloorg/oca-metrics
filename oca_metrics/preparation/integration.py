@@ -36,7 +36,12 @@ import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
-from oca_metrics.utils.normalization import stz_doi
+from oca_metrics.utils.constants import TAXONOMY_FIELDS
+from oca_metrics.utils.normalization import (
+    safe_int,
+    stz_binary_flag,
+    stz_doi,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -85,8 +90,6 @@ def _scan_openalex_for_matches(ds_oa, doi_to_scl_idx, columns_to_load, start_yea
 def _consolidate_scl_oa_results(scl_docs, oa_matches):
     """Consolidates OpenAlex matches and metrics for each SciELO article."""
     scl_oa_merged = []
-    tax_fields = ["domain", "field", "subfield", "topic"]
-    safe_int = lambda x: int(x) if pd.notna(x) else 0
 
     for idx, scl_doc in enumerate(scl_docs):
         merged_entry = scl_doc.copy()
@@ -109,17 +112,22 @@ def _consolidate_scl_oa_results(scl_docs, oa_matches):
                 "citations_window_5y": 0,
             }
             works_detailed = {}
-            found_taxonomy = {field: set() for field in tax_fields}
+            found_taxonomy = {field: set() for field in TAXONOMY_FIELDS}
+            has_journal_oa = False
 
             for wid, m in unique_oa_records.items():
+                journal_is_oa = bool(stz_binary_flag(m.get("is_journal_oa")))
+
                 work_metrics = {
                     "language": m.get("language"),
-                    "source_id": m.get("source_id"),
+                    "journal_id": m.get("journal_id"),
+                    "is_journal_oa": int(journal_is_oa),
                     "total_citations": safe_int(m.get("citations_total")),
                     "citations_window_2y": safe_int(m.get("citations_window_2y")),
                     "citations_window_3y": safe_int(m.get("citations_window_3y")),
                     "citations_window_5y": safe_int(m.get("citations_window_5y")),
                 }
+                has_journal_oa = has_journal_oa or journal_is_oa
 
                 global_agg["total_citations"] += work_metrics["total_citations"]
                 global_agg["citations_window_2y"] += work_metrics["citations_window_2y"]
@@ -134,10 +142,12 @@ def _consolidate_scl_oa_results(scl_docs, oa_matches):
                         global_agg[col] = global_agg.get(col, 0) + val
 
                 works_detailed[wid] = work_metrics
-                for field in tax_fields:
+                for field in TAXONOMY_FIELDS:
                     val = m.get(field)
                     if pd.notna(val) and val:
                         found_taxonomy[field].add(str(val))
+
+            global_agg["is_journal_oa"] = int(has_journal_oa)
 
             merged_entry["oa_metrics"] = {
                 "work_ids": sorted(list(unique_oa_records.keys())),
@@ -146,7 +156,7 @@ def _consolidate_scl_oa_results(scl_docs, oa_matches):
                 "individual_works": works_detailed
             }
             merged_entry["has_oa_match"] = True
-            for field in tax_fields:
+            for field in TAXONOMY_FIELDS:
                 merged_entry[field] = sorted(list(found_taxonomy[field]))
         
         scl_oa_merged.append(merged_entry)
@@ -179,10 +189,11 @@ def match_scielo_with_openalex(scl_docs, oa_parquet_dir, start_year=2018, end_ye
     ds_oa = ds.dataset(parquet_files, format="parquet", schema=unified_schema)
 
     columns_to_load = [
-        "work_id", "doi", "publication_year", "language", "source_id",
-        "domain", "field", "subfield", "topic",
+        "work_id", "doi", "publication_year", "language", "journal_id",
+        *TAXONOMY_FIELDS,
         "citations_total", "citations_window_2y",
-        "citations_window_3y", "citations_window_5y"
+        "citations_window_3y", "citations_window_5y",
+        "is_journal_oa",
     ]
     specific_years = [f"citations_{y}" for y in range(2012, datetime.datetime.now().year + 1)]
     columns_to_load.extend([c for c in specific_years if c in unified_schema.names])
@@ -236,7 +247,7 @@ def _consolidate_row(row, merged_data):
     new_row["is_merged"] = len(merged_data["oa_metrics"]["work_ids"]) > 1
     new_row["oa_individual_works"] = json.dumps(merged_data["oa_metrics"]["individual_works"])
 
-    for tax in ["domain", "field", "subfield", "topic"]:
+    for tax in TAXONOMY_FIELDS:
         if (not new_row.get(tax) or pd.isna(new_row.get(tax))) and merged_data.get(tax):
             new_row[tax] = merged_data[tax][0]
 
@@ -339,6 +350,7 @@ def _write_unmatched_scielo(writer, scl_oa_merged, new_schema, unified_schema):
             for col in unified_schema.names:
                 if col.startswith("citations_") or "window" in col:
                     row[col] = 0
+            row["is_journal_oa"] = 0
 
             row["scielo_collection"] = data.get("collection", [])
             row["scielo_pid_v2"] = data.get("pid_v2", [])
@@ -346,7 +358,7 @@ def _write_unmatched_scielo(writer, scl_oa_merged, new_schema, unified_schema):
             row["is_merged"] = False
             row["oa_individual_works"] = None
 
-            for tax in ["domain", "field", "subfield", "topic"]:
+            for tax in TAXONOMY_FIELDS:
                 if data.get(tax):
                     row[tax] = data[tax][0]
 

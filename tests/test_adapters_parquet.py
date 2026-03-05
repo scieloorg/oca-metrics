@@ -36,6 +36,7 @@ class TestParquetAdapter(unittest.TestCase):
             'citations_window_2y': [2, 1, 4, 3, 1],
             'citations_window_3y': [3, 2, 5, 4, 2],
             'citations_window_5y': [5, 3, 8, 6, 3],
+            'is_journal_oa': [1, 0, 1, 0, 1],
             'citations_2024': [1, 0, 3, 2, 0],
             'citations_2025': [2, 1, 5, 0, 0],
         }
@@ -109,11 +110,13 @@ class TestParquetAdapter(unittest.TestCase):
         # S1 window 2y: 2, 4. Threshold 2. Both >= 2. Count = 2.
         self.assertEqual(s1['top_50pct_window_2y_publications_count'], 2)
         self.assertEqual(s1['is_journal_multilingual'], 1)
+        self.assertEqual(s1['is_journal_oa'], 1)
         self.assertEqual(s1['citations_2024'], 4)  # 1 + 3
         self.assertEqual(s1['citations_2025'], 7)  # 2 + 5
 
         s2 = df_journals[df_journals['journal_id'] == 'S2'].iloc[0]
         self.assertEqual(s2['is_journal_multilingual'], 0)
+        self.assertEqual(s2['is_journal_oa'], 0)
 
 
 if __name__ == '__main__':
