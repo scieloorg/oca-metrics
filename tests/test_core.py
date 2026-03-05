@@ -70,9 +70,9 @@ class TestMetricsEngine(unittest.TestCase):
         self.assertEqual(df_result.iloc[0]['category_level'], self.level)
         self.assertEqual(df_result.iloc[0]['publication_year'], self.year)
         
-        # Check normalized impact
-        self.assertEqual(df_result.iloc[0]['journal_impact_normalized'], 10.0 / 5.0) # 2.0
-        self.assertEqual(df_result.iloc[1]['journal_impact_normalized'], 2.5 / 5.0) # 0.5
+        # Check cohort impact
+        self.assertEqual(df_result.iloc[0]['journal_impact_cohort'], 10.0 / 5.0) # 2.0
+        self.assertEqual(df_result.iloc[1]['journal_impact_cohort'], 2.5 / 5.0) # 0.5
 
         # Check percentile shares
         # J1 top 1% share: 2/10 = 20%

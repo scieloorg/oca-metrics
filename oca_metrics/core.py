@@ -14,7 +14,7 @@ from oca_metrics.utils.constants import (
 from oca_metrics.utils.metrics import (
     build_threshold_key,
     compute_share_pct,
-    compute_normalized_impact,
+    compute_cohort_impact,
 )
 
 
@@ -59,8 +59,8 @@ class MetricsEngine:
         for w in windows:
             df_journals[f'category_citations_total_window_{w}y'] = baseline_res[f'total_citations_window_{w}y']
             df_journals[f'category_citations_mean_window_{w}y'] = baseline_res[f'mean_citations_window_{w}y']
-            df_journals[f'journal_impact_normalized_window_{w}y'] = df_journals[f'journal_citations_mean_window_{w}y'].apply(
-                lambda x: compute_normalized_impact(x, baseline_res[f'mean_citations_window_{w}y'])
+            df_journals[f'journal_impact_cohort_window_{w}y'] = df_journals[f'journal_citations_mean_window_{w}y'].apply(
+                lambda x: compute_cohort_impact(x, baseline_res[f'mean_citations_window_{w}y'])
             )
             
         for p in self.target_percentiles:
@@ -99,11 +99,10 @@ class MetricsEngine:
         if available_meta_cols:
             df_journals = pd.merge(
                 df_journals, 
-                df_meta[available_meta_cols], 
-                left_on=['journal_id', 'publication_year'], 
-                right_on=['source_id', 'publication_year'], 
-                how='left', 
-                suffixes=('', '_meta')
+                df_meta[available_meta_cols],
+                on=['journal_id', 'publication_year'],
+                how='left',
+                suffixes=('', '_meta'),
             )
 
         def _series_or_default(col_name: str, default_value):

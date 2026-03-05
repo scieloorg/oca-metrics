@@ -12,7 +12,7 @@ from oca_metrics.utils.metadata import (
 from oca_metrics.utils.metrics import (
     build_threshold_key,
     compute_share_pct,
-    compute_normalized_impact,
+    compute_cohort_impact,
     compute_percentiles,
     extract_threshold_pct_values,
 )

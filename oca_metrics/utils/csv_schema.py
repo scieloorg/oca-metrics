@@ -33,8 +33,8 @@ def get_csv_schema_order(
     cols += list(yearly_citation_cols)
     cols += ["journal_citations_mean"]
     cols += [f"journal_citations_mean_window_{w}y" for w in windows]
-    cols += ["journal_citations_total", "journal_impact_normalized"]
-    cols += [f"journal_impact_normalized_window_{w}y" for w in windows]
+    cols += ["journal_citations_total", "journal_impact_cohort"]
+    cols += [f"journal_impact_cohort_window_{w}y" for w in windows]
     cols += ["journal_publications_count", "is_journal_multilingual"]
 
     for p in target_percentiles:
