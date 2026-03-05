@@ -22,7 +22,7 @@ class TestIntegration(unittest.TestCase):
             'doi': ['https://doi.org/10.1001/1', 'https://doi.org/10.1001/2', None],
             'publication_year': [2024, 2024, 2024],
             'language': ['en', 'pt', 'en'],
-            'source_id': ['S1', 'S1', 'S2'],
+            'journal_id': ['S1', 'S1', 'S2'],
             'domain': ['Health', 'Health', 'Social'],
             'field': ['Medicine', 'Medicine', 'Sociology'],
             'subfield': ['Surgery', 'Surgery', 'Theory'],

@@ -16,8 +16,8 @@ class TestParquetAdapter(unittest.TestCase):
         # Create dummy data
         data = {
             'publication_year': [2024, 2024, 2024, 2023, 2018],
-            'source_id': ['S1', 'S2', 'S1', 'S3', 'S4'],
-            'source_issn_l': ['1234-5678', '8765-4321', '1234-5678', '1111-2222', '9999-0000'],
+            'journal_id': ['S1', 'S2', 'S1', 'S3', 'S4'],
+            'journal_issn_l': ['1234-5678', '8765-4321', '1234-5678', '1111-2222', '9999-0000'],
             'language': ['en', 'en', 'pt', 'en', 'en'],
             'is_merged': [1, 0, 0, 0, 0],
             'oa_individual_works': [

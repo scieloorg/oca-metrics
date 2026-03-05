@@ -125,7 +125,7 @@ class TestMetricsEngine(unittest.TestCase):
 
         # Metadata
         df_meta = pd.DataFrame({
-            'source_id': ['https://openalex.org/S1'],
+            'journal_id': ['https://openalex.org/S1'],
             'publication_year': [2024],
             'journal_title': ['Journal One'],
             'is_scielo': [1],

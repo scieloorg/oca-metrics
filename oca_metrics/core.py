@@ -83,12 +83,12 @@ class MetricsEngine:
                 )
 
         if df_meta is not None and not df_meta.empty:
-            meta_cols = ['source_id', 'publication_year'] + METADATA_TEXT_COLUMNS + METADATA_FLAG_COLUMNS
+            meta_cols = ['journal_id', 'publication_year'] + METADATA_TEXT_COLUMNS + METADATA_FLAG_COLUMNS
             available_meta_cols = [c for c in meta_cols if c in df_meta.columns]
 
-            if 'source_id' not in available_meta_cols or 'publication_year' not in available_meta_cols:
+            if 'journal_id' not in available_meta_cols or 'publication_year' not in available_meta_cols:
                 logger.warning(
-                    "Metadata is missing required matching columns source_id/publication_year. "
+                    "Metadata is missing required matching columns journal_id/publication_year. "
                     "Skipping metadata merge for this batch."
                 )
                 available_meta_cols = []
