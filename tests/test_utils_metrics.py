@@ -1,6 +1,6 @@
 import unittest
-import pandas as pd
 import os
+import pandas as pd
 
 from oca_metrics.utils.constants import XLSX_TO_INTERNAL_COLUMN_MAP
 from oca_metrics.utils.csv_schema import (
@@ -12,9 +12,12 @@ from oca_metrics.utils.metadata import (
 from oca_metrics.utils.metrics import (
     build_threshold_key,
     compute_share_pct,
-    compute_normalized_impact,
+    compute_cohort_impact,
+    compute_impact_comparability_reference,
+    compute_impact_is_comparable,
     compute_percentiles,
     extract_threshold_pct_values,
+    resolve_impact_min_pubs_category_share,
 )
 from oca_metrics.utils.normalization import (
     format_output_header_name,
@@ -50,9 +53,15 @@ class TestUtilsMetrics(unittest.TestCase):
         self.assertIn("category_citations_mean_window_2y", schema)
         self.assertIn("top_1pct_all_time_citations_threshold", schema)
         self.assertIn("top_50pct_window_3y_publications_share_pct", schema)
-        self.assertIn("country", schema)
-        self.assertIn("collection", schema)
+        self.assertIn("cohort_impact_is_comparable", schema)
+        self.assertIn("cohort_journal_publications_median", schema)
+        self.assertIn("cohort_impact_min_pubs_category_share", schema)
+        self.assertIn("cohort_impact_min_pubs_median_multiplier", schema)
+        self.assertIn("cohort_impact_window_2y_is_comparable", schema)
+        self.assertIn("journal_country", schema)
+        self.assertIn("scielo_collection", schema)
         self.assertIn("is_scopus", schema)
+        self.assertIn("is_journal_oa", schema)
         self.assertIn("is_journal_multilingual", schema)
         self.assertIn("citations_2023", schema)
         self.assertIn("citations_2024", schema)
@@ -81,19 +90,19 @@ class TestUtilsMetrics(unittest.TestCase):
         try:
             loaded_df = load_global_metadata(filename)
             self.assertFalse(loaded_df.empty)
-            self.assertIn('source_id', loaded_df.columns)
+            self.assertIn('journal_id', loaded_df.columns)
             self.assertIn('journal_title', loaded_df.columns)
-            self.assertIn('country', loaded_df.columns)
+            self.assertIn('journal_country', loaded_df.columns)
             self.assertIn('scielo_collection_acronym', loaded_df.columns)
             self.assertIn('scielo_active_valid', loaded_df.columns)
-            self.assertIn('publisher_name', loaded_df.columns)
+            self.assertIn('journal_publisher', loaded_df.columns)
             self.assertIn('is_scopus', loaded_df.columns)
-            self.assertEqual(loaded_df.iloc[0]['source_id'], "https://openalex.org/S1")
+            self.assertEqual(loaded_df.iloc[0]['journal_id'], "https://openalex.org/S1")
             self.assertEqual(loaded_df.iloc[0]['is_scielo'], 1)
-            self.assertEqual(loaded_df.iloc[0]['country'], "Brazil")
+            self.assertEqual(loaded_df.iloc[0]['journal_country'], "Brazil")
             self.assertEqual(loaded_df.iloc[0]['scielo_collection_acronym'], "scl")
             self.assertEqual(loaded_df.iloc[0]['scielo_active_valid'], 1)
-            self.assertEqual(loaded_df.iloc[0]['publisher_name'], "Pub 1")
+            self.assertEqual(loaded_df.iloc[0]['journal_publisher'], "Pub 1")
             self.assertEqual(loaded_df.iloc[0]['is_scopus'], 1)
             self.assertEqual(loaded_df.iloc[0]['capes_agricultural_sciences'], 1)
         finally:
@@ -121,7 +130,7 @@ class TestUtilsMetrics(unittest.TestCase):
         try:
             loaded_df = load_global_metadata(filename)
             self.assertEqual(len(loaded_df), 1)
-            self.assertEqual(loaded_df.iloc[0]['source_id'], "https://openalex.org/S1")
+            self.assertEqual(loaded_df.iloc[0]['journal_id'], "https://openalex.org/S1")
             self.assertEqual(loaded_df.iloc[0]['publication_year'], 2024)
         finally:
             if os.path.exists(filename):
@@ -156,10 +165,11 @@ class TestUtilsMetrics(unittest.TestCase):
         df = load_global_metadata("non_existent.xlsx")
         self.assertTrue(df.empty)
 
-    def test_compute_normalized_impact(self):
-        self.assertEqual(compute_normalized_impact(10, 5), 2.0)
-        self.assertEqual(compute_normalized_impact(0, 5), 0.0)
-        self.assertEqual(compute_normalized_impact(10, 0), 0.0)
+    def test_compute_cohort_impact(self):
+        self.assertEqual(compute_cohort_impact(10, 5), 2.0)
+        self.assertEqual(compute_cohort_impact(0, 5), 0.0)
+        self.assertEqual(compute_cohort_impact(10, 0), 0.0)
+        self.assertEqual(compute_cohort_impact(0, 0), 0.0)
 
     def test_compute_percentiles(self):
         citations = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
@@ -197,6 +207,39 @@ class TestUtilsMetrics(unittest.TestCase):
         den = pd.Series([4, 0, None, 8])
         res = compute_share_pct(num, den)
         self.assertEqual(list(res), [50.0, 0.0, 0.0, 50.0])
+
+    def test_compute_impact_comparability_reference(self):
+        ref = compute_impact_comparability_reference(
+            category_publications_count=200,
+            publication_counts=pd.Series([2, 4, 10]),
+            min_publications_abs=12,
+            category_share=0.05,
+            median_multiplier=1.0,
+        )
+        self.assertEqual(ref["cohort_impact_min_pubs_required"], 12)
+        self.assertEqual(ref["cohort_journal_publications_median"], 4.0)
+        self.assertEqual(ref["cohort_impact_min_pubs_category_share"], 0.05)
+        self.assertEqual(ref["cohort_impact_min_pubs_median_multiplier"], 1.0)
+
+        ref2 = compute_impact_comparability_reference(
+            category_publications_count=100,
+            publication_counts=pd.Series([2, 4, 10]),
+            min_publications_abs=2,
+            category_share=0.01,
+            median_multiplier=2.0,
+        )
+        self.assertEqual(ref2["cohort_impact_min_pubs_required"], 8)
+
+    def test_compute_impact_is_comparable(self):
+        publication_counts = pd.Series([1, 8, 10, None])
+        flags = compute_impact_is_comparable(publication_counts, min_required=8)
+        self.assertEqual(list(flags), [0, 1, 1, 0])
+
+    def test_resolve_impact_min_pubs_category_share(self):
+        self.assertEqual(resolve_impact_min_pubs_category_share("domain"), 0.0003)
+        self.assertEqual(resolve_impact_min_pubs_category_share("field"), 0.001)
+        self.assertEqual(resolve_impact_min_pubs_category_share("subfield"), 0.005)
+        self.assertEqual(resolve_impact_min_pubs_category_share("topic"), 0.02)
 
 
 if __name__ == '__main__':

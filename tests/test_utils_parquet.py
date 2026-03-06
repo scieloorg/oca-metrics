@@ -15,7 +15,7 @@ def test_extract_yearly_citation_columns():
         "citations_total",
         "citations_2025",
         "citations_2023",
-        "source_id",
+        "journal_id",
         "citations_2024",
     ]
     assert extract_yearly_citation_columns(cols) == ["citations_2023", "citations_2024", "citations_2025"]

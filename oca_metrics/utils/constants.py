@@ -1,10 +1,11 @@
 OPENALEX_URL_PREFIX = "https://openalex.org/"
+TAXONOMY_FIELDS = ("domain", "field", "subfield", "topic")
 
 XLSX_TO_INTERNAL_COLUMN_MAP = {
     "OpenAlex ID": "openalex_id",
     "Journal": "journal_title",
-    "Publisher Name": "publisher_name",
-    "Country": "country",
+    "Publisher Name": "journal_publisher",
+    "Country": "journal_country",
     "SciELO collection acronym": "scielo_collection_acronym",
     "SciELO Thematic Areas": "scielo_thematic_areas",
     "CAPES agricultural sciences": "capes_agricultural_sciences",
@@ -69,16 +70,16 @@ METADATA_FLAG_COLUMNS = [
 
 METADATA_TEXT_COLUMNS = [
     "journal_title",
-    "publisher_name",
-    "country",
+    "journal_publisher",
+    "journal_country",
     "scielo_collection_acronym",
     "scielo_thematic_areas",
 ]
 
 CSV_METADATA_COLUMNS = [
-    "publisher_name",
-    "country",
-    "collection",
+    "journal_publisher",
+    "journal_country",
+    "scielo_collection",
     "scielo_thematic_areas",
     "capes_agricultural_sciences",
     "capes_applied_social_sciences",
@@ -106,4 +107,5 @@ CSV_METADATA_COLUMNS = [
     "is_pmc",
     "is_openalex",
     "is_qualis",
+    "is_journal_oa",
 ]

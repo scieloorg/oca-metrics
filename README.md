@@ -66,9 +66,14 @@ oca-prep extract-oa --base-dir /path/to/snapshots --output-dir ./oa-parquet
 ```
 
 #### 2. SciELO Processing
-Loads and deduplicates (merges) SciELO documents.
+Loads and deduplicates (merges) SciELO documents. The command assumes a JSONL file by default;
+if you are working with a MongoDB dump in BSON format you can tell the tool to read it with the
+`--format bson` option.
+
 ```bash
 oca-prep prepare-scielo --input articles.jsonl --output-jsonl scielo_merged.jsonl --strategies doi pid title
+# or, when the source is a BSON file:
+oca-prep prepare-scielo --input articles.bson --format bson --output-jsonl scielo_merged.jsonl --strategies doi pid title
 ```
 
 #### 3. Integration and Merged Parquet Generation
@@ -97,7 +102,7 @@ Main arguments:
 
 Excerpt from a real run (`metrics_by_field.20260215.csv`, rounded for readability, journal names anonymized):
 
-| Category | Level | Journal | Year | SciELO | Journal publications | Journal citations total | Journal impact normalized | Top 50% publications share (%) |
+| Category | Level | Journal | Year | SciELO | Journal publications | Journal citations total | Journal cohort impact | Top 50% publications share (%) |
 |:--|:--|:--|--:|--:|--:|--:|--:|--:|
 | Agricultural and Biological Sciences | field | Journal A | 2020 | 0 | 57 | 82.0 | 0.1217 | 10.53 |
 | Agricultural and Biological Sciences | field | Journal B | 2020 | 0 | 1895 | 2855.0 | 0.1274 | 12.14 |
@@ -133,9 +138,9 @@ The global metadata Excel file (`--global-xlsx`) is used to enrich bibliometric 
 | :--- | :--- | :--- |
 | **Journal Info** | `journal_title` | The journal title. |
 | | `journal_id` | The journal's OpenAlex identifier (e.g., S123456789). |
-| | `publisher_name` | The publisher's name. |
+| | `journal_publisher` | The publisher's name. |
 | | `journal_issn` | ISSNs associated with the journal. |
-| | `country` | The country responsible for the journal. |
+| | `journal_country` | The country responsible for the journal. |
 | **SciELO Info** | `is_scielo` | Boolean indicating if the journal belongs to the SciELO network. |
 | | `scielo_active_valid` | Journal status in the SciELO network for the given year. |
 | | `scielo_collection_acronym` | SciELO collection acronym. |
@@ -156,8 +161,8 @@ The input Parquet file serves as the publication data source. It must contain th
 | | `is_merged` | Boolean indicating if the record is merged. |
 | | `oa_individual_works` | JSON with individual work details (if merged). |
 | | `all_work_ids` | List of all OpenAlex work IDs when 'is_merged' is True. |
-| **Source Info** | `source_id` | Source (journal) identifier, typically an OpenAlex URL. |
-| | `source_issn_l` | Journal ISSN-L. |
+| **Journal Info** | `journal_id` | Journal identifier, typically an OpenAlex URL. |
+| | `journal_issn_l` | Journal ISSN-L. |
 | | `scielo_collection` | SciELO collection of the publication. |
 | | `scielo_pid_v2` | SciELO PID v2 of the publication. |
 | **Categories** | `domain` | Domain category. |
@@ -182,12 +187,11 @@ The resulting CSV file contains the computed bibliometric indicators, organized 
 | **Journal Info** | `journal_id` | Journal's OpenAlex ID (URL). |
 | | `journal_issn` | Journal's ISSN-L. |
 | | `journal_title` | Journal title. |
-| | `country` | The country responsible for the journal. |
-| | `publisher_name` | Publisher name. |
-| | `scielo_collection_acronym` | SciELO collection acronym. |
-| | `scielo_network_country` | SciELO network country. |
+| | `journal_country` | The country responsible for the journal. |
+| | `journal_publisher` | Publisher name. |
+| | `scielo_collection` | SciELO collection acronym. |
 | | `scielo_active_valid` | Journal status in SciELO. |
-| | `is_scielo` | Indicator if the journal is in SciELO. |
+| | `is_scielo` | Binary indicator (0/1) if the journal is in SciELO. |
 | **Category Metrics** | `category_publications_count` | Total publications in the category for the year. |
 | | `category_citations_total` | Total citations received by the category. |
 | | `category_citations_mean` | Mean citations per publication in the category. |
@@ -196,11 +200,17 @@ The resulting CSV file contains the computed bibliometric indicators, organized 
 | **Journal Metrics** | `journal_publications_count` | Total publications of the journal in the year. |
 | | `journal_citations_total` | Total citations received by the journal. |
 | | `journal_citations_mean` | Mean citations per journal publication. |
-| | `journal_impact_normalized` | Normalized impact (Journal Mean / Category Mean). |
+| | `journal_impact_cohort` | Cohort impact (Journal Mean / Category Mean). |
 | | `citations_window_{w}y` | Total citations received in the {w}-year window. |
 | | `citations_window_{w}y_works` | Number of works with at least 1 citation in the window. |
 | | `journal_citations_mean_window_{w}y` | Mean citations in the {w}-year window. |
-| | `journal_impact_normalized_window_{w}y` | Normalized impact in the {w}-year window. |
+| | `journal_impact_cohort_window_{w}y` | Cohort impact in the {w}-year window. |
+| | `cohort_impact_min_pubs_required` | Minimum publications required for impact comparability in the cohort. |
+| | `cohort_journal_publications_median` | Median journal publication count in the cohort (category + year). |
+| | `cohort_impact_min_pubs_category_share` | Category/year publication share used to compute the comparability threshold. |
+| | `cohort_impact_min_pubs_median_multiplier` | Multiplier over cohort median used in the comparability threshold. |
+| | `cohort_impact_is_comparable` | Indicator (0/1) if the journal impact is comparable in the cohort. |
+| | `cohort_impact_window_{w}y_is_comparable` | Indicator (0/1) if windowed cohort impact is comparable. |
 | **Percentile Metrics** | `top_{pct}pct_all_time_citations_threshold` | Citation threshold for top {pct}% (all time). |
 | | `top_{pct}pct_all_time_publications_count` | Number of publications in top {pct}% (all time). |
 | | `top_{pct}pct_all_time_publications_share_pct` | Share (%) of publications in top {pct}% (all time). |
@@ -209,6 +219,7 @@ The resulting CSV file contains the computed bibliometric indicators, organized 
 | | `top_{pct}pct_window_{w}y_publications_share_pct` | Share (%) of publications in top {pct}% in {w}-year window. |
 
 > **Note**: `{w}` represents the window size (e.g., 2, 3, 5) and `{pct}` represents the percentile (e.g., 1, 5, 10, 50).
+> **Boolean standard in output CSV**: all binary indicator columns are encoded as integers `0`/`1`.
 
 ---
 
@@ -253,7 +264,7 @@ In this example, the final record consolidates two OpenAlex works (W1 and W2) li
 
 ## Category classification and metric mathematics
 
-Articles are classified into four hierarchical categories: **domain**, **field**, **subfield**, and **topic**. All bibliometric metrics are calculated and normalized within each category and publication year. This allows fair comparison between journals from different areas, as each journal is evaluated relative to its reference group.
+Articles are classified into four hierarchical categories: **domain**, **field**, **subfield**, and **topic**. All bibliometric metrics are calculated within each category and publication year. This allows fair comparison between journals from different areas, as each journal is evaluated relative to its reference group.
 
 ### Symbol legend
 
@@ -268,6 +279,7 @@ Articles are classified into four hierarchical categories: **domain**, **field**
 - $Q_p$: percentile function at percentile $p$
 - $p$: percentile used for threshold calculation (99, 95, 90, 50)
 - $q$: top share in percent (1, 5, 10, 50), with $q=100-p$
+- cohort $(c,y)$: reference set of documents from category $c$ and publication year $y$ (`category_id`, `publication_year`)
 
 ### Normalization by category and year
 
@@ -309,9 +321,9 @@ $$
 \bar{C}_{j,c,y}^{(w)} = \frac{C_{j,c,y}^{(w)}}{N_{j,c,y}}
 $$
 
-### Normalized impact
+### Cohort impact
 
-The normalized impact of the journal is computed with a zero-denominator guard:
+The cohort impact of the journal is computed with a zero-denominator guard:
 
 $$
 I_{j,c,y} =
@@ -330,6 +342,30 @@ I_{j,c,y}^{(w)} =
 \frac{\bar{C}_{j,c,y}^{(w)}}{\bar{C}_{c,y}^{(w)}}, & \text{otherwise}
 \end{cases}
 $$
+
+### Cohort impact comparability flag
+
+Impact values are always computed, but a comparability flag is emitted based on sample size:
+
+$$
+N_{\min,c,y} = \max\left(N_{\text{abs}}, \left\lceil \alpha \cdot N_{c,y}\right\rceil, \left\lceil \beta \cdot Q50_j(N_{j,c,y})\right\rceil\right)
+$$
+
+$$
+F_{j,c,y} =
+\begin{cases}
+1, & \text{if } N_{j,c,y} \ge N_{\min,c,y} \\
+0, & \text{otherwise}
+\end{cases}
+$$
+
+Where:
+- $N_{\text{abs}}$: absolute floor for minimum publications (default: 12)
+- $\alpha$: minimum share over total category/year publications.
+  - Defaults by level: domain=0.0003, field=0.001, subfield=0.005, topic=0.02
+- $\beta$: multiplier over cohort median journal publications (default: 1.0)
+
+The same flag is used for windowed cohort impact, since publication count is unchanged by citation window.
 
 ### Percentiles and thresholds
 

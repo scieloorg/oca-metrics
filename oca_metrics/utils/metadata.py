@@ -11,7 +11,7 @@ from oca_metrics.utils.constants import (
 )
 from oca_metrics.utils.normalization import (
     stz_binary_flag,
-    stz_openalex_source_id,
+    stz_openalex_journal_id,
     stz_text,
 )
 
@@ -48,7 +48,7 @@ def _resolve_metadata_duplicates(df: pd.DataFrame, key_cols: Sequence[str], valu
     duplicate_pairs = df_dups.drop_duplicates(subset=list(key_cols)).shape[0]
     conflicting_rows = sum(g[2] for g in conflicting_groups)
     logger.warning(
-        "Found %s duplicated source_id + publication_year rows in metadata "
+        "Found %s duplicated journal_id + publication_year rows in metadata "
         "(%s total duplicated rows across %s pairs): kept %s stable pairs and dropped %s conflicting pairs (%s rows).",
         duplicate_rows_extra,
         duplicate_rows_total,
@@ -60,7 +60,7 @@ def _resolve_metadata_duplicates(df: pd.DataFrame, key_cols: Sequence[str], valu
 
     if conflicting_groups:
         logger.warning(
-            "Sample conflicting source_id + publication_year pairs (source_id, year, rows): %s",
+            "Sample conflicting journal_id + publication_year pairs (journal_id, year, rows): %s",
             conflicting_groups[:5],
         )
 
@@ -80,7 +80,7 @@ def load_global_metadata(path: str) -> pd.DataFrame:
             return pd.DataFrame()
 
         df = df.rename(columns=XLSX_TO_INTERNAL_COLUMN_MAP)
-        df["source_id"] = df["openalex_id"].apply(stz_openalex_source_id)
+        df["journal_id"] = df["openalex_id"].apply(stz_openalex_journal_id)
         df = df.drop(columns=["openalex_id"])
 
         df["publication_year"] = pd.to_numeric(df["publication_year"], errors="coerce")
@@ -91,14 +91,14 @@ def load_global_metadata(path: str) -> pd.DataFrame:
         for col in METADATA_FLAG_COLUMNS:
             df[col] = df[col].apply(stz_binary_flag)
 
-        df = df[df["source_id"].notna()].copy()
+        df = df[df["journal_id"].notna()].copy()
         df = df[df["publication_year"].notna()].copy()
         df["publication_year"] = df["publication_year"].astype(int)
 
-        ordered_cols = ["source_id", "publication_year"] + METADATA_TEXT_COLUMNS + METADATA_FLAG_COLUMNS
+        ordered_cols = ["journal_id", "publication_year"] + METADATA_TEXT_COLUMNS + METADATA_FLAG_COLUMNS
         df = _resolve_metadata_duplicates(
             df[ordered_cols].copy(),
-            key_cols=["source_id", "publication_year"],
+            key_cols=["journal_id", "publication_year"],
             value_cols=METADATA_TEXT_COLUMNS + METADATA_FLAG_COLUMNS,
         )
         return df[ordered_cols]

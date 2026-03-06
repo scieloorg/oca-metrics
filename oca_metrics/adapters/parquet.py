@@ -65,12 +65,14 @@ class ParquetAdapter(BaseAdapter):
 
     def _build_journal_select_columns(self, windows: Sequence[int], top_counts_sql: Sequence[str]) -> List[str]:
         select_cols = [
-            "source_id as journal_id",
-            "ANY_VALUE(source_issn_l) as journal_issn",
+            "journal_id",
+            "ANY_VALUE(journal_issn_l) as journal_issn",
             "COUNT(*) as journal_publications_count",
             "SUM(COALESCE(citations_total, 0)) as journal_citations_total",
             "AVG(COALESCE(citations_total, 0)) as journal_citations_mean",
+            "MAX(COALESCE(is_journal_oa, 0))::INTEGER as is_journal_oa",
         ]
+
         select_cols.extend([f"SUM(COALESCE(citations_window_{w}y, 0)) as citations_window_{w}y" for w in windows])
         select_cols.extend(
             [f"SUM(CASE WHEN COALESCE(citations_window_{w}y, 0) >= 1 THEN 1 ELSE 0 END) as citations_window_{w}y_works" for w in windows]
@@ -89,11 +91,11 @@ class ParquetAdapter(BaseAdapter):
 
         query = f"""
         SELECT
-            source_id as journal_id,
+            journal_id,
             is_merged,
             oa_individual_works
         FROM {self.table_name}
-        WHERE publication_year = ? AND {level_col} = ? AND source_id IS NOT NULL
+        WHERE publication_year = ? AND {level_col} = ? AND journal_id IS NOT NULL
         """
         try:
             df = self.con.execute(query, [year, cat_id]).df()
@@ -188,20 +190,20 @@ class ParquetAdapter(BaseAdapter):
         SELECT 
             {", ".join(select_cols)}
         FROM {self.table_name}
-        WHERE publication_year = ? AND {level_col} = ? AND source_id IS NOT NULL
-        GROUP BY source_id
+        WHERE publication_year = ? AND {level_col} = ? AND journal_id IS NOT NULL
+        GROUP BY journal_id
         """
         try:
             df_journals = self.con.execute(query, [year, cat_id]).df()
             if df_journals.empty:
                 return df_journals
 
-            # Check for multiple ISSNs per source_id
+            # Check for multiple ISSNs per journal_id
             issn_check_query = f"""
-            SELECT source_id, COUNT(DISTINCT source_issn_l) as issn_count
+            SELECT journal_id, COUNT(DISTINCT journal_issn_l) as issn_count
             FROM {self.table_name}
-            WHERE publication_year = ? AND {level_col} = ? AND source_id IS NOT NULL
-            GROUP BY source_id
+            WHERE publication_year = ? AND {level_col} = ? AND journal_id IS NOT NULL
+            GROUP BY journal_id
             HAVING issn_count > 1
             """
             inconsistent_issns = self.con.execute(issn_check_query, [year, cat_id]).fetchall()

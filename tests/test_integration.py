@@ -22,7 +22,8 @@ class TestIntegration(unittest.TestCase):
             'doi': ['https://doi.org/10.1001/1', 'https://doi.org/10.1001/2', None],
             'publication_year': [2024, 2024, 2024],
             'language': ['en', 'pt', 'en'],
-            'source_id': ['S1', 'S1', 'S2'],
+            'journal_id': ['S1', 'S1', 'S2'],
+            'is_journal_oa': [1, 1, 0],
             'domain': ['Health', 'Health', 'Social'],
             'field': ['Medicine', 'Medicine', 'Sociology'],
             'subfield': ['Surgery', 'Surgery', 'Theory'],
@@ -110,7 +111,6 @@ class TestIntegration(unittest.TestCase):
         unmatched_scl = df_final[df_final['work_id'] == 'scielo:S0002'].iloc[0]
         self.assertEqual(unmatched_scl['citations_total'], 0)
         self.assertEqual(unmatched_scl['publication_year'], 2024)
-
 
 if __name__ == '__main__':
     unittest.main()

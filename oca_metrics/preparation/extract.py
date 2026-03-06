@@ -32,36 +32,38 @@ def process_chunk(lines, start_year=2018, end_year=None):
             if not (pub_year and start_year <= pub_year <= end_year):
                 continue
 
-            # Collects journal information
-            source = None
+            # Collect journal information
+            journal = None
             p_loc = src.get("primary_location") or {}
             p_src = p_loc.get("source") or {}
             if p_src.get("type") == "journal":
-                source = p_src
+                journal = p_src
             else:
                 for loc in src.get("locations", []):
                     if loc and loc.get("source") and loc["source"].get("type") == "journal":
-                        source = loc["source"]
+                        journal = loc["source"]
                         break
 
-            if not source:
+            if not journal:
                 continue
 
             pt = src.get("primary_topic") or {}
+            journal_is_oa = journal.get("is_oa")
 
             res = {
                 "work_id": src.get("id"),
                 "publication_year": pub_year,
                 "language": src.get("language"),
                 "doi": src.get("doi"),
-                "source_id": source.get("id"),
-                "source_issn_l": source.get("issn_l"),
+                "journal_id": journal.get("id"),
+                "journal_issn_l": journal.get("issn_l"),
+                "is_journal_oa": int(bool(journal_is_oa)) if journal_is_oa is not None else 0,
                 "domain": pt.get("domain", {}).get("display_name"),
                 "field": pt.get("field", {}).get("display_name"),
                 "subfield": pt.get("subfield", {}).get("display_name"),
                 "topic": pt.get("display_name"),
                 "topic_score": pt.get("score"),
-                "citations_total": src.get("cited_by_count", 0)
+                "citations_total": src.get("cited_by_count", 0),
             }
 
             # Citations

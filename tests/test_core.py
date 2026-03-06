@@ -70,9 +70,17 @@ class TestMetricsEngine(unittest.TestCase):
         self.assertEqual(df_result.iloc[0]['category_level'], self.level)
         self.assertEqual(df_result.iloc[0]['publication_year'], self.year)
         
-        # Check normalized impact
-        self.assertEqual(df_result.iloc[0]['journal_impact_normalized'], 10.0 / 5.0) # 2.0
-        self.assertEqual(df_result.iloc[1]['journal_impact_normalized'], 2.5 / 5.0) # 0.5
+        # Check cohort impact
+        self.assertEqual(df_result.iloc[0]['journal_impact_cohort'], 10.0 / 5.0) # 2.0
+        self.assertEqual(df_result.iloc[1]['journal_impact_cohort'], 2.5 / 5.0) # 0.5
+        self.assertEqual(df_result.iloc[0]['cohort_impact_min_pubs_required'], 15)
+        self.assertEqual(df_result.iloc[0]['cohort_journal_publications_median'], 15.0)
+        self.assertEqual(df_result.iloc[0]['cohort_impact_min_pubs_category_share'], 0.001)
+        self.assertEqual(df_result.iloc[0]['cohort_impact_min_pubs_median_multiplier'], 1.0)
+        self.assertEqual(df_result.iloc[0]['cohort_impact_is_comparable'], 0)
+        self.assertEqual(df_result.iloc[1]['cohort_impact_is_comparable'], 1)
+        self.assertEqual(df_result.iloc[0]['cohort_impact_window_2y_is_comparable'], 0)
+        self.assertEqual(df_result.iloc[0]['cohort_impact_window_3y_is_comparable'], 0)
 
         # Check percentile shares
         # J1 top 1% share: 2/10 = 20%
@@ -81,8 +89,9 @@ class TestMetricsEngine(unittest.TestCase):
         # Check metadata integration (default empty)
         self.assertEqual(df_result.iloc[0]['journal_title'], 'J1')
         self.assertEqual(df_result.iloc[0]['is_scielo'], 0)
-        self.assertEqual(df_result.iloc[0]['country'], '')
-        self.assertEqual(df_result.iloc[0]['collection'], '')
+        self.assertEqual(df_result.iloc[0]['journal_country'], '')
+        self.assertEqual(df_result.iloc[0]['scielo_collection'], '')
+        self.assertEqual(df_result.iloc[0]['is_journal_oa'], 0)
 
     def test_process_category_with_metadata(self):
         # Setup mocks similar to success case
@@ -111,6 +120,7 @@ class TestMetricsEngine(unittest.TestCase):
             'journal_id': ['https://openalex.org/S1', 'https://openalex.org/S2'],
             'journal_publications_count': [10, 20],
             'journal_citations_mean': [10.0, 2.5],
+            'is_journal_oa': [1, 0],
             'top_1pct_all_time_publications_count': [1, 0],
             'top_50pct_all_time_publications_count': [5, 2]
         })
@@ -125,11 +135,11 @@ class TestMetricsEngine(unittest.TestCase):
 
         # Metadata
         df_meta = pd.DataFrame({
-            'source_id': ['https://openalex.org/S1'],
+            'journal_id': ['https://openalex.org/S1'],
             'publication_year': [2024],
             'journal_title': ['Journal One'],
             'is_scielo': [1],
-            'country': ['Brazil'],
+            'journal_country': ['Brazil'],
             'scielo_active_valid': [1],
             'scielo_collection_acronym': ['scl'],
         })
@@ -142,14 +152,18 @@ class TestMetricsEngine(unittest.TestCase):
         row1 = df_result[df_result['journal_id'] == 'https://openalex.org/S1'].iloc[0]
         self.assertEqual(row1['journal_title'], 'Journal One')
         self.assertEqual(row1['is_scielo'], 1)
-        self.assertEqual(row1['country'], 'Brazil')
-        self.assertEqual(row1['collection'], 'scl')
+        self.assertEqual(row1['journal_country'], 'Brazil')
+        self.assertEqual(row1['scielo_collection'], 'scl')
+        self.assertEqual(row1['is_journal_oa'], 1)
+        self.assertEqual(row1['cohort_impact_is_comparable'], 0)
         
         row2 = df_result[df_result['journal_id'] == 'https://openalex.org/S2'].iloc[0]
         self.assertEqual(row2['journal_title'], 'https://openalex.org/S2')
         self.assertEqual(row2['is_scielo'], 0)
-        self.assertEqual(row2['country'], '')
-        self.assertEqual(row2['collection'], '')
+        self.assertEqual(row2['journal_country'], '')
+        self.assertEqual(row2['scielo_collection'], '')
+        self.assertEqual(row2['is_journal_oa'], 0)
+        self.assertEqual(row2['cohort_impact_is_comparable'], 1)
 
     def test_process_category_no_baseline(self):
         self.mock_adapter.compute_baseline.return_value = None
