@@ -205,8 +205,10 @@ The resulting CSV file contains the computed bibliometric indicators, organized 
 | | `citations_window_{w}y_works` | Number of works with at least 1 citation in the window. |
 | | `journal_citations_mean_window_{w}y` | Mean citations in the {w}-year window. |
 | | `journal_impact_cohort_window_{w}y` | Cohort impact in the {w}-year window. |
-| | `cohort_journal_publications_median` | Median publications per journal in the cohort (category + year). |
 | | `cohort_impact_min_pubs_required` | Minimum publications required for impact comparability in the cohort. |
+| | `cohort_journal_publications_median` | Median journal publication count in the cohort (category + year). |
+| | `cohort_impact_min_pubs_category_share` | Category/year publication share used to compute the comparability threshold. |
+| | `cohort_impact_min_pubs_median_multiplier` | Multiplier over cohort median used in the comparability threshold. |
 | | `cohort_impact_is_comparable` | Indicator (0/1) if the journal impact is comparable in the cohort. |
 | | `cohort_impact_window_{w}y_is_comparable` | Indicator (0/1) if windowed cohort impact is comparable. |
 | **Percentile Metrics** | `top_{pct}pct_all_time_citations_threshold` | Citation threshold for top {pct}% (all time). |
@@ -346,11 +348,7 @@ $$
 Impact values are always computed, but a comparability flag is emitted based on sample size:
 
 $$
-\tilde{N}_{c,y} = \operatorname{median}_j(N_{j,c,y})
-$$
-
-$$
-N_{\min,c,y} = \max\left(N_{\text{abs}}, \left\lceil \alpha \cdot \tilde{N}_{c,y}\right\rceil\right)
+N_{\min,c,y} = \max\left(N_{\text{abs}}, \left\lceil \alpha \cdot N_{c,y}\right\rceil, \left\lceil \beta \cdot Q50_j(N_{j,c,y})\right\rceil\right)
 $$
 
 $$
@@ -362,8 +360,10 @@ F_{j,c,y} =
 $$
 
 Where:
-- $N_{\text{abs}}$: absolute floor for minimum publications (default: 8)
-- $\alpha$: ratio over the cohort median (default: 0.5)
+- $N_{\text{abs}}$: absolute floor for minimum publications (default: 12)
+- $\alpha$: minimum share over total category/year publications.
+  - Defaults by level: domain=0.0003, field=0.001, subfield=0.005, topic=0.02
+- $\beta$: multiplier over cohort median journal publications (default: 1.0)
 
 The same flag is used for windowed cohort impact, since publication count is unchanged by citation window.
 

@@ -205,8 +205,10 @@ O arquivo CSV resultante contém os indicadores bibliométricos computados, orga
 | | `citations_window_{w}y_works` | Número de trabalhos com ao menos 1 citação na janela. |
 | | `journal_citations_mean_window_{w}y` | Média de citações na janela de {w} anos. |
 | | `journal_impact_cohort_window_{w}y` | Impacto de coorte na janela de {w} anos. |
-| | `cohort_journal_publications_median` | Mediana de publicações por periódico na coorte (categoria + ano). |
 | | `cohort_impact_min_pubs_required` | Mínimo de publicações exigido para comparabilidade do impacto na coorte. |
+| | `cohort_journal_publications_median` | Mediana de publicações dos periódicos na coorte (categoria + ano). |
+| | `cohort_impact_min_pubs_category_share` | Participação de publicações da categoria/ano usada para calcular o limiar de comparabilidade. |
+| | `cohort_impact_min_pubs_median_multiplier` | Multiplicador sobre a mediana da coorte usado no limiar de comparabilidade. |
 | | `cohort_impact_is_comparable` | Indicador (0/1) se o impacto do periódico é comparável na coorte. |
 | | `cohort_impact_window_{w}y_is_comparable` | Indicador (0/1) se o impacto de coorte em janela é comparável. |
 | **Métricas Percentil** | `top_{pct}pct_all_time_citations_threshold` | Threshold de citações para o top {pct}% (todo o tempo). |
@@ -346,11 +348,7 @@ $$
 Os valores de impacto são sempre calculados, mas uma flag de comparabilidade é emitida com base no tamanho da amostra:
 
 $$
-\tilde{N}_{c,y} = \operatorname{median}_j(N_{j,c,y})
-$$
-
-$$
-N_{\min,c,y} = \max\left(N_{\text{abs}}, \left\lceil \alpha \cdot \tilde{N}_{c,y}\right\rceil\right)
+N_{\min,c,y} = \max\left(N_{\text{abs}}, \left\lceil \alpha \cdot N_{c,y}\right\rceil, \left\lceil \beta \cdot Q50_j(N_{j,c,y})\right\rceil\right)
 $$
 
 $$
@@ -362,8 +360,10 @@ F_{j,c,y} =
 $$
 
 Onde:
-- $N_{\text{abs}}$: piso absoluto de publicações mínimas (padrão: 8)
-- $\alpha$: razão aplicada sobre a mediana da coorte (padrão: 0.5)
+- $N_{\text{abs}}$: piso absoluto de publicações mínimas (padrão: 12)
+- $\alpha$: participação mínima sobre o total de publicações da categoria/ano.
+  - Padrões por nível: domain=0.0003, field=0.001, subfield=0.005, topic=0.02
+- $\beta$: multiplicador sobre a mediana de publicações dos periódicos da coorte (padrão: 1.0)
 
 A mesma flag é usada para impacto de coorte em janelas, pois o número de publicações não muda com a janela de citação.
 

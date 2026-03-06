@@ -191,7 +191,7 @@ El archivo CSV resultante contiene los indicadores bibliométricos computados, o
 | | `journal_publisher` | Nombre de la editorial. |
 | | `scielo_collection` | Acrónimo de la colección SciELO. |
 | | `scielo_active_valid` | Estado de la revista en SciELO. |
-| | `is_scielo` | Indicador si la revista está en SciELO. |
+| | `is_scielo` | Indicador binario (0/1) si la revista está en SciELO. |
 | **Métricas Categoría** | `category_publications_count` | Total de publicaciones en la categoría en el año. |
 | | `category_citations_total` | Total de citas recibidas por la categoría. |
 | | `category_citations_mean` | Promedio de citas por publicación en la categoría. |
@@ -205,6 +205,12 @@ El archivo CSV resultante contiene los indicadores bibliométricos computados, o
 | | `citations_window_{w}y_works` | Número de trabajos con al menos 1 cita en la ventana. |
 | | `journal_citations_mean_window_{w}y` | Promedio de citas en la ventana de {w} años. |
 | | `journal_impact_cohort_window_{w}y` | Impacto de cohorte en la ventana de {w} años. |
+| | `cohort_impact_min_pubs_required` | Mínimo de publicaciones requerido para comparabilidad del impacto en la cohorte. |
+| | `cohort_journal_publications_median` | Mediana de publicaciones de las revistas en la cohorte (categoría + año). |
+| | `cohort_impact_min_pubs_category_share` | Proporción de publicaciones de categoría/año usada para calcular el umbral de comparabilidad. |
+| | `cohort_impact_min_pubs_median_multiplier` | Multiplicador sobre la mediana de la cohorte usado en el umbral de comparabilidad. |
+| | `cohort_impact_is_comparable` | Indicador (0/1) de si el impacto de la revista es comparable en la cohorte. |
+| | `cohort_impact_window_{w}y_is_comparable` | Indicador (0/1) de si el impacto de cohorte en ventana es comparable. |
 | **Métricas Percentil** | `top_{pct}pct_all_time_citations_threshold` | Umbral de citas para el top {pct}% (todo el tiempo). |
 | | `top_{pct}pct_all_time_publications_count` | Número de publicaciones en el top {pct}% (todo el tiempo). |
 | | `top_{pct}pct_all_time_publications_share_pct` | Porcentaje de publicaciones en el top {pct}% (todo el tiempo). |
@@ -213,6 +219,7 @@ El archivo CSV resultante contiene los indicadores bibliométricos computados, o
 | | `top_{pct}pct_window_{w}y_publications_share_pct` | Porcentaje de publicaciones en el top {pct}% en ventana de {w} años. |
 
 > **Nota**: `{w}` representa el tamaño de la ventana (ej: 2, 3, 5) y `{pct}` representa el percentil (ej: 1, 5, 10, 50).
+> **Estándar de booleanos en el CSV de salida**: todas las columnas de indicador binario se codifican como enteros `0`/`1`.
 
 ---
 
@@ -336,6 +343,30 @@ I_{j,c,y}^{(w)} =
 \end{cases}
 $$
 
+### Flag de comparabilidad del impacto de cohorte
+
+Los valores de impacto siempre se calculan, pero se emite una flag de comparabilidad según el tamaño de muestra:
+
+$$
+N_{\min,c,y} = \max\left(N_{\text{abs}}, \left\lceil \alpha \cdot N_{c,y}\right\rceil, \left\lceil \beta \cdot Q50_j(N_{j,c,y})\right\rceil\right)
+$$
+
+$$
+F_{j,c,y} =
+\begin{cases}
+1, & \text{si } N_{j,c,y} \ge N_{\min,c,y} \\
+0, & \text{en otro caso}
+\end{cases}
+$$
+
+Donde:
+- $N_{\text{abs}}$: piso absoluto de publicaciones mínimas (valor por defecto: 12)
+- $\alpha$: proporción mínima sobre el total de publicaciones de la categoría/año.
+  - Valores por nivel: domain=0.0003, field=0.001, subfield=0.005, topic=0.02
+- $\beta$: multiplicador sobre la mediana de publicaciones de revistas de la cohorte (valor por defecto: 1.0)
+
+La misma flag se usa para el impacto de cohorte en ventanas, ya que el número de publicaciones no cambia con la ventana de citación.
+
 ### Percentiles y umbrales
 
 Los umbrales se calculan para percentiles $p \in \{99,95,90,50\}$, que corresponden a top $q \in \{1,5,10,50\}$ donde $q=100-p$.
@@ -381,30 +412,6 @@ Si una revista tiene 20 artículos en una categoría en 2024, con 100 citas tota
 - Si el umbral del top 5% es $T_{c,2024}^{(5)}=11$ y 2 artículos están por encima de ese umbral, entonces $S_{j,c,2024}^{(5)} = \frac{2}{20} \times 100 = 10\%$
 
 Estas fórmulas permiten entender y comparar el desempeño de las revistas en cada área, ajustando por diferencias de tamaño e impacto.
-
----
-
-## Estrategias de Fusión SciELO-OpenAlex y OpenAlex-OpenAlex
-
-Esta biblioteca implementa dos procesos principales de fusión/consolidación:
-
-**1. Fusión SciELO-OpenAlex**
-- Para cada artículo SciELO, todos los DOIs (incluyendo variantes por idioma) se utilizan para buscar coincidencias en trabajos de OpenAlex en el Parquet.
-- Si varios trabajos de OpenAlex coinciden con un solo artículo SciELO (por ejemplo, versiones multilingües), todos se agrupan bajo ese artículo SciELO.
-- Para cada grupo, todas las métricas relevantes (citas, ventanas, etc.) se agregan (suman) para representar el impacto total del artículo, independientemente del idioma/versión.
-- Los detalles individuales de cada trabajo de OpenAlex se preservan para referencia.
-- Los campos de taxonomía (domain, field, subfield, topic) se consolidan a partir de todos los trabajos coincidentes.
-- No se realiza fusión OpenAlex-OpenAlex en esta etapa; solo agrupamiento bajo artículos SciELO.
-
-**2. Consolidación OpenAlex-OpenAlex**
-- En el Parquet final, todos los trabajos de OpenAlex que coincidieron con un solo artículo SciELO se consolidan en un solo registro (el 'superviviente'), con todas las métricas agregadas.
-- El campo 'all_work_ids' lista todos los IDs de OpenAlex que fueron fusionados.
-- El campo 'is_merged' indica si el registro es resultado de fusionar múltiples trabajos de OpenAlex.
-- El campo 'oa_individual_works' almacena los detalles de cada trabajo original de OpenAlex en formato JSON.
-- Los trabajos de OpenAlex que no se asociaron a ningún artículo SciELO permanecen sin cambios, con 'is_merged' en False.
-- Esto asegura que cada artículo esté representado de forma única, con todas las versiones y citas consolidadas, evitando doble conteo.
-
-Este proceso de dos pasos garantiza una deduplicación robusta y un cálculo preciso de métricas para artículos publicados en varios idiomas o con variaciones de metadatos.
 
 ## Limitaciones y Cobertura
 
